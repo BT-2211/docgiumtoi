@@ -44,7 +44,10 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
 
   // Helper to ensure Expiration Date (HSD) is always clearly included in speech audio
   const getFullSpeechText = () => {
-    let script = result.speech_script || '';
+    let script = result.speech_text || result.speech_script || '';
+    if (result.status === 'unclear' || result.status === 'not_found') {
+      return script;
+    }
     const mentionsHSD = /hạn|hsd|exp|hết hạn|ngày sản xuất/i.test(script);
     if (!mentionsHSD && result.expiration_info) {
       let hsdSpoken = '';
@@ -52,8 +55,6 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         hsdSpoken = ` Cảnh báo: Sản phẩm này ĐÃ HẾT HẠN SỬ DỤNG (${result.expiration_info.expiry_date_text}), Bác tuyệt đối không được dùng nữa ạ!`;
       } else if (result.expiration_info.status === 'VALID') {
         hsdSpoken = ` Về hạn sử dụng: Sản phẩm còn hạn dùng, ${result.expiration_info.expiry_date_text} ạ.`;
-      } else {
-        hsdSpoken = ` Về hạn sử dụng: Trên bao bì không thấy rõ ngày hết hạn, Bác nên nhờ người nhà kiểm tra lại ạ.`;
       }
       script = `${script} ${hsdSpoken}`;
     }
@@ -110,26 +111,64 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
     speechService.speak(text, settings.speechRate);
   };
 
+  const isSuccess = !result.status || result.status === 'success';
+  const isUnclear = result.status === 'unclear';
+  const isNotFound = result.status === 'not_found';
+  const isUnclearOrNotFound = isUnclear || isNotFound;
+
   const isExpired = result.expiration_info?.status === 'EXPIRED';
   const isValid = result.expiration_info?.status === 'VALID';
-  const isUnclear = result.expiration_info?.status === 'UNCLEAR';
-  const isMedicine = result.item_category === 'MEDICINE';
+  const isHsdUnclear = result.expiration_info?.status === 'UNCLEAR';
+  const isMedicine = result.item_type === 'medicine' || result.item_category === 'MEDICINE';
+
+  const usageSummaryText = result.usage_summary || result.primary_purpose || result.primary_function || '';
+  const usageInstructionsText =
+    result.usage_instructions ||
+    result.usage_instruction ||
+    result.how_to_use ||
+    'Chưa thấy thông tin liều dùng trên mặt ảnh này. Bác nên dùng theo chỉ định của bác sĩ hoặc đơn thuốc nhé ạ.';
+
+  const hasSpecificSafetyAlert =
+    isSuccess &&
+    Boolean(
+      result.safety_alert &&
+        result.safety_alert.trim().length > 0 &&
+        !result.safety_alert.toLowerCase().includes('bình thường') &&
+        !result.safety_alert.toLowerCase().includes('không có cảnh báo') &&
+        !result.safety_alert.toLowerCase().includes('không có lưu ý')
+    );
+
+  const speechScriptText = result.speech_text || result.speech_script || '';
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pb-28 pt-2 px-3 sm:px-4">
       {/* Visual Header Confirmation & Category */}
-      <div className="flex items-center justify-between bg-[#E6F4EA] border-2 border-[#34A853]/30 rounded-[24px] px-5 py-3.5 shadow-sm">
-        <div className="flex items-center gap-2.5 text-[#137333]">
-          <CheckCircle2 className="w-7 h-7 shrink-0" strokeWidth={2.75} />
-          <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
-            ĐÃ NHẬN DIỆN NHÃN BAO BÌ
+      {isSuccess ? (
+        <div className="flex items-center justify-between bg-[#E6F4EA] border-2 border-[#34A853]/30 rounded-[24px] px-5 py-3.5 shadow-sm">
+          <div className="flex items-center gap-2.5 text-[#137333]">
+            <CheckCircle2 className="w-7 h-7 shrink-0" strokeWidth={2.75} />
+            <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
+              ĐÃ NHẬN DIỆN NHÃN BAO BÌ
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black bg-[#137333] text-white px-3 py-1.5 rounded-full uppercase tracking-wider shadow-xs">
+            <BookmarkCheck className="w-4 h-4" />
+            <span>Đã lưu vào tủ</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between bg-amber-50 border-2 border-amber-300 rounded-[24px] px-5 py-3.5 shadow-sm">
+          <div className="flex items-center gap-2.5 text-amber-900">
+            <AlertTriangle className="w-7 h-7 text-amber-600 shrink-0" strokeWidth={2.75} />
+            <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
+              {isUnclear ? 'ẢNH BỊ MỜ / LÓA SÁNG' : 'CHƯA TÌM THẤY VẬT PHẨM'}
+            </span>
+          </div>
+          <span className="text-xs sm:text-sm font-black bg-amber-200 text-amber-900 px-3 py-1.5 rounded-full uppercase tracking-wider">
+            Cần chụp lại
           </span>
         </div>
-        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black bg-[#137333] text-white px-3 py-1.5 rounded-full uppercase tracking-wider shadow-xs">
-          <BookmarkCheck className="w-4 h-4" />
-          <span>Đã lưu vào tủ</span>
-        </div>
-      </div>
+      )}
 
       {/* Optional Captured Image Thumbnail */}
       {imagePreview && (
@@ -144,123 +183,129 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
               Ảnh vừa chụp
             </span>
             <p className="text-base text-[#1A1A1A] font-bold mt-1.5">
-              Đã đọc chính xác nhãn mác và hạn sử dụng cho Bác.
+              {isSuccess
+                ? 'Đã đọc chính xác nhãn mác và hạn sử dụng cho Bác.'
+                : isUnclear
+                ? 'Ảnh chụp bị lóa hoặc mờ nét do run tay. Bác bấm chụp lại nhé ạ.'
+                : 'Chưa nhận diện được bao bì. Bác để thuốc gần camera và chụp lại nhé ạ.'}
             </p>
           </div>
         </div>
       )}
 
-      {/* 1. EXPIRATION DATE BANNER (CRITICAL PROMINENCE FOR SENIORS) */}
-      <div
-        id="card-expiration-date"
-        className={`p-6 sm:p-7 rounded-[32px] border-4 flex flex-col gap-4 shadow-md ${
-          isExpired
-            ? 'bg-red-600 text-white border-red-700 animate-pulse'
-            : isValid
-            ? 'bg-[#E6F4EA] text-[#137333] border-[#34A853]'
-            : 'bg-amber-50 text-amber-900 border-amber-400'
-        }`}
-      >
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start sm:items-center gap-4">
-            <div
-              className={`w-14 h-14 rounded-[20px] flex items-center justify-center shrink-0 shadow-md ${
-                isExpired
-                  ? 'bg-white text-red-600'
-                  : isValid
-                  ? 'bg-[#137333] text-white'
-                  : 'bg-amber-400 text-amber-950'
-              }`}
-            >
-              {isExpired ? (
-                <AlertOctagon className="w-9 h-9" strokeWidth={3} />
-              ) : isValid ? (
-                <ShieldCheck className="w-9 h-9" strokeWidth={3} />
-              ) : (
-                <HelpCircle className="w-9 h-9" strokeWidth={3} />
-              )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`px-3 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${
-                    isExpired
-                      ? 'bg-white text-red-600'
-                      : isValid
-                      ? 'bg-[#137333] text-white'
-                      : 'bg-amber-300 text-amber-900'
-                  }`}
-                >
-                  {isExpired ? '⛔ HẾT HẠN SỬ DỤNG' : isValid ? '✅ CÒN HẠN DÙNG' : '⚠️ KHÔNG RÕ HSD'}
-                </span>
-                {result.expiration_info?.days_remaining_text && (
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                      isExpired ? 'bg-red-800 text-white' : isValid ? 'bg-[#137333]/15 text-[#137333]' : 'bg-amber-200 text-amber-950'
-                    }`}
-                  >
-                    ⏳ {result.expiration_info.days_remaining_text}
-                  </span>
-                )}
-              </div>
-              <h3
-                className={`text-2xl sm:text-4xl font-black mt-1.5 tracking-tight leading-tight ${
-                  isExpired ? 'text-white' : isUnclear ? 'text-amber-950' : 'text-[#137333]'
+      {/* 1. EXPIRATION DATE BANNER - Only shown on SUCCESS */}
+      {isSuccess && (
+        <div
+          id="card-expiration-date"
+          className={`p-6 sm:p-7 rounded-[32px] border-4 flex flex-col gap-4 shadow-md ${
+            isExpired
+              ? 'bg-red-600 text-white border-red-700 animate-pulse'
+              : isValid
+              ? 'bg-[#E6F4EA] text-[#137333] border-[#34A853]'
+              : 'bg-amber-50 text-amber-900 border-amber-400'
+          }`}
+        >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4">
+              <div
+                className={`w-14 h-14 rounded-[20px] flex items-center justify-center shrink-0 shadow-md ${
+                  isExpired
+                    ? 'bg-white text-red-600'
+                    : isValid
+                    ? 'bg-[#137333] text-white'
+                    : 'bg-amber-400 text-amber-950'
                 }`}
               >
-                {result.expiration_info?.expiry_date_text || 'Không tìm thấy HSD trên nhãn'}
-              </h3>
-              {isExpired && (
-                <p className="text-white/95 font-black text-base sm:text-lg mt-1 uppercase">
-                  TUYỆT ĐỐI KHÔNG DÙNG SẢN PHẨM NÀY NỮA ĐỂ BẢO VỆ SỨC KHỎE!
-                </p>
+                {isExpired ? (
+                  <AlertOctagon className="w-9 h-9" strokeWidth={3} />
+                ) : isValid ? (
+                  <ShieldCheck className="w-9 h-9" strokeWidth={3} />
+                ) : (
+                  <HelpCircle className="w-9 h-9" strokeWidth={3} />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-3 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${
+                      isExpired
+                        ? 'bg-white text-red-600'
+                        : isValid
+                        ? 'bg-[#137333] text-white'
+                        : 'bg-amber-300 text-amber-900'
+                    }`}
+                  >
+                    {isExpired ? '⛔ HẾT HẠN SỬ DỤNG' : isValid ? '✅ CÒN HẠN DÙNG' : '⚠️ KHÔNG RÕ HSD'}
+                  </span>
+                  {result.expiration_info?.days_remaining_text && (
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        isExpired ? 'bg-red-800 text-white' : isValid ? 'bg-[#137333]/15 text-[#137333]' : 'bg-amber-200 text-amber-950'
+                      }`}
+                    >
+                      ⏳ {result.expiration_info.days_remaining_text}
+                    </span>
+                  )}
+                </div>
+                <h3
+                  className={`text-2xl sm:text-4xl font-black mt-1.5 tracking-tight leading-tight ${
+                    isExpired ? 'text-white' : isHsdUnclear ? 'text-amber-950' : 'text-[#137333]'
+                  }`}
+                >
+                  {result.expiration_info?.expiry_date_text || result.expiry_date || 'Không tìm thấy HSD trên nhãn'}
+                </h3>
+                {isExpired && (
+                  <p className="text-white/95 font-black text-base sm:text-lg mt-1 uppercase">
+                    TUYỆT ĐỐI KHÔNG DÙNG SẢN PHẨM NÀY NỮA ĐỂ BẢO VỆ SỨC KHỎE!
+                  </p>
+                )}
+                {isHsdUnclear && (
+                  <p className="text-amber-800 font-bold text-sm sm:text-base mt-1">
+                    Ngày in trên nhãn bị mờ hoặc không in. Bác nên nhờ con cháu kiểm tra lại ạ.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Dedicated Listen HSD Button */}
+            <button
+              id="btn-listen-hsd-only"
+              onClick={handleSpeakOnlyHSD}
+              className={`min-h-[54px] px-5 rounded-[20px] font-black text-base flex items-center justify-center gap-2 shrink-0 shadow-md active:scale-95 transition-all uppercase tracking-wider cursor-pointer ${
+                isExpired
+                  ? 'bg-white text-red-600 hover:bg-gray-100'
+                  : isValid
+                  ? 'bg-[#137333] text-white hover:bg-[#0f5c29]'
+                  : 'bg-amber-400 text-amber-950 hover:bg-amber-500'
+              }`}
+            >
+              <Volume2 className="w-5 h-5 stroke-[2.75]" />
+              <span>🔊 Nghe Hạn Dùng</span>
+            </button>
+          </div>
+
+          {/* Extra Expiration Metadata Sub-box */}
+          {(result.expiration_info?.mfg_date_text || result.expiration_info?.location_found) && (
+            <div
+              className={`pt-3 border-t grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm font-bold ${
+                isExpired ? 'border-white/20 text-white/90' : isValid ? 'border-green-200 text-green-900' : 'border-amber-200 text-amber-900'
+              }`}
+            >
+              {result.expiration_info.mfg_date_text && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 shrink-0" />
+                  <span>{result.expiration_info.mfg_date_text}</span>
+                </div>
               )}
-              {isUnclear && (
-                <p className="text-amber-800 font-bold text-sm sm:text-base mt-1">
-                  Ngày in trên nhãn bị mờ hoặc không in. Bác nên nhờ con cháu kiểm tra lại ạ.
-                </p>
+              {result.expiration_info.location_found && (
+                <div className="flex items-center gap-2">
+                  <span>📍 Vị trí in: {result.expiration_info.location_found}</span>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* Dedicated Listen HSD Button */}
-          <button
-            id="btn-listen-hsd-only"
-            onClick={handleSpeakOnlyHSD}
-            className={`min-h-[54px] px-5 rounded-[20px] font-black text-base flex items-center justify-center gap-2 shrink-0 shadow-md active:scale-95 transition-all uppercase tracking-wider cursor-pointer ${
-              isExpired
-                ? 'bg-white text-red-600 hover:bg-gray-100'
-                : isValid
-                ? 'bg-[#137333] text-white hover:bg-[#0f5c29]'
-                : 'bg-amber-400 text-amber-950 hover:bg-amber-500'
-            }`}
-          >
-            <Volume2 className="w-5 h-5 stroke-[2.75]" />
-            <span>🔊 Nghe Hạn Dùng</span>
-          </button>
+          )}
         </div>
-
-        {/* Extra Expiration Metadata Sub-box */}
-        {(result.expiration_info?.mfg_date_text || result.expiration_info?.location_found) && (
-          <div
-            className={`pt-3 border-t grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm font-bold ${
-              isExpired ? 'border-white/20 text-white/90' : isValid ? 'border-green-200 text-green-900' : 'border-amber-200 text-amber-900'
-            }`}
-          >
-            {result.expiration_info.mfg_date_text && (
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 shrink-0" />
-                <span>{result.expiration_info.mfg_date_text}</span>
-              </div>
-            )}
-            {result.expiration_info.location_found && (
-              <div className="flex items-center gap-2">
-                <span>📍 Vị trí in: {result.expiration_info.location_found}</span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* 2. PRODUCT NAME & CATEGORY CARD */}
       <div
@@ -280,37 +325,41 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         </div>
 
         <h2 className="text-3xl sm:text-5xl font-black uppercase text-[#E65F2B] tracking-tight leading-tight">
-          {result.product_name}
+          {result.item_name || result.product_name}
         </h2>
 
-        {/* Primary function / Purpose */}
-        <div className="bg-[#F7F9FC] border-2 border-gray-200/80 rounded-[24px] p-5 sm:p-6 text-left">
-          <p className="text-xs uppercase tracking-widest text-[#2B67E6] font-black mb-1.5 flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-[#2B67E6]" />
-            <span>CÔNG DỤNG CHÍNH</span>
-          </p>
-          <p className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] leading-relaxed">
-            {result.primary_purpose || result.primary_function}
-          </p>
-        </div>
+        {/* Primary function / Purpose - Only shown on SUCCESS if available */}
+        {isSuccess && usageSummaryText && (
+          <div className="bg-[#F7F9FC] border-2 border-gray-200/80 rounded-[24px] p-5 sm:p-6 text-left">
+            <p className="text-xs uppercase tracking-widest text-[#2B67E6] font-black mb-1.5 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-[#2B67E6]" />
+              <span>CÔNG DỤNG CHÍNH</span>
+            </p>
+            <p className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] leading-relaxed">
+              {usageSummaryText}
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* 3. HOW TO USE / HƯỚNG DẪN CÁCH DÙNG */}
-      <div className="bg-[#F7F9FC] p-6 sm:p-7 rounded-[32px] border-l-8 border-[#2B67E6] shadow-sm flex flex-col gap-3">
-        <p className="text-xs sm:text-sm text-[#2B67E6] font-black uppercase tracking-widest flex items-center gap-2">
-          <BookOpen className="w-5 h-5 text-[#2B67E6]" strokeWidth={2.75} />
-          <span>HƯỚNG DẪN CÁCH DÙNG</span>
-        </p>
-
-        <div className="bg-white text-[#1A1A1A] border-2 border-gray-200/80 p-5 sm:p-6 rounded-[24px] shadow-xs">
-          <p className="text-xl sm:text-2xl font-black leading-snug tracking-tight text-[#1A1A1A]">
-            {result.usage_instruction || result.how_to_use}
+      {/* 3. HOW TO USE / HƯỚNG DẪN CÁCH DÙNG (ONLY SHOWN ON SUCCESS) */}
+      {isSuccess && (
+        <div className="bg-[#F7F9FC] p-6 sm:p-7 rounded-[32px] border-l-8 border-[#2B67E6] shadow-sm flex flex-col gap-3">
+          <p className="text-xs sm:text-sm text-[#2B67E6] font-black uppercase tracking-widest flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-[#2B67E6]" strokeWidth={2.75} />
+            <span>HƯỚNG DẪN CÁCH DÙNG</span>
           </p>
-        </div>
-      </div>
 
-      {/* 4. SAFETY ALERT / CẢNH BÁO AN TOÀN */}
-      {result.safety_alert && (
+          <div className="bg-white text-[#1A1A1A] border-2 border-gray-200/80 p-5 sm:p-6 rounded-[24px] shadow-xs">
+            <p className="text-xl sm:text-2xl font-black leading-snug tracking-tight text-[#1A1A1A]">
+              {usageInstructionsText}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 4. SAFETY ALERT / CẢNH BÁO AN TOÀN (ONLY SHOWN ON SUCCESS WHEN THERE IS A SPECIFIC ALERT) */}
+      {hasSpecificSafetyAlert && (
         <div
           id="card-safety-alert"
           className="bg-white border-3 border-red-300 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-sm"
@@ -330,14 +379,14 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         </div>
       )}
 
-      {/* 5. CARING ADVICE / ASSISTANT SPEECH SCRIPT */}
+      {/* 5. CARING ADVICE / ASSISTANT SPEECH SCRIPT (ALWAYS SHOWN FOR THE SENIOR) */}
       <div className="bg-[#E6F4EA] p-6 sm:p-7 rounded-[32px] border-2 border-[#34A853]/30 shadow-sm">
         <p className="text-[#137333] text-xs sm:text-sm font-black uppercase tracking-widest mb-2 flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-[#137333]" />
           <span>LỜI TRỢ LÝ ĐỌC CHO BÁC:</span>
         </p>
         <p className="text-xl sm:text-2xl font-medium text-[#137333] italic leading-relaxed">
-          "{result.speech_script}"
+          "{speechScriptText}"
         </p>
       </div>
 
@@ -433,7 +482,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
 
           {showFullScript && (
             <div className="mt-3 bg-white/10 p-4 rounded-[20px] border border-white/20 text-lg leading-relaxed text-white">
-              <p className="italic font-medium">"{result.speech_script}"</p>
+              <p className="italic font-medium">"{speechScriptText}"</p>
             </div>
           )}
         </div>
@@ -444,10 +493,10 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         <button
           id="btn-scan-another"
           onClick={onScanAnother}
-          className="w-full min-h-[76px] bg-[#E65F2B] text-white font-black text-2xl px-6 py-4 rounded-[28px] flex items-center justify-center gap-3 hover:bg-[#d85320] active:scale-95 transition-all shadow-lg shadow-orange-500/20 uppercase tracking-tight"
+          className="w-full min-h-[76px] bg-[#E65F2B] text-white font-black text-2xl px-6 py-4 rounded-[28px] flex items-center justify-center gap-3 hover:bg-[#d85320] active:scale-95 transition-all shadow-lg shadow-orange-500/20 uppercase tracking-tight cursor-pointer"
         >
           <Camera className="w-8 h-8 text-white" strokeWidth={2.75} />
-          <span>CHỤP HOẶC TRA CỨU ĐỒ KHÁC</span>
+          <span>{isSuccess ? 'CHỤP HOẶC TRA CỨU ĐỒ KHÁC' : 'CHỤP LẠI ẢNH RÕ HƠN'}</span>
         </button>
       </div>
     </div>

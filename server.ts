@@ -128,20 +128,29 @@ YÊU CẦU XỬ LÝ NGUYÊN TẮC VÀ EDGE CASES:
 
 2. XỬ LÝ HẠN SỬ DỤNG (EXP / MFG):
    - So sánh Hạn sử dụng (EXP) tìm thấy với NGÀY HIỆN TẠI (${currentDateStr}).
-   - Nếu HẠN SỬ DỤNG < NGÀY HIỆN TẠI: Gán "is_expired": true và tạo LỜI CẢNH BÁO BÁO ĐỘNG trong lời thoại.
+   - Nếu HẠN SỬ DỤNG < NGÀY HIỆN TẠI: Gán "is_expired": true và tạo LỜI CẢNH BÁO BÁO ĐỘNG trong lời thoại và safety_alert.
    - Chấp nhận tất cả định dạng ngày: DD/MM/YYYY, MM/DD/YYYY, YYYY.MM.DD, EXP0526, MFG/EXP.
    - Nếu không tìm thấy hoặc bị mờ: Gán "expiry_date": "Không tìm thấy", "is_expired": false.
 
 3. XỬ LÝ EDGE CASES (Ảnh mờ, Lóa sáng, Run tay, Bấm nhầm):
    - Nếu ảnh quá lóa, bị mất nét do run tay, hoặc không thấy rõ chữ: Gán "status": "unclear".
-   - Lời thoại (speech_text) phải nhắc lịch sự: "Bác ơi, ảnh bị lóa hoặc mờ rồi. Bác cầm chắc tay và chụp lại giúp cháu ạ."
-   - Nếu không tìm thấy vật thể/sản phẩm: Gán "status": "not_found", "item_type": "unknown".
+   - Lời thoại (speech_text) phải nhắc lịch sự: "Bác ơi, ảnh bị lóa hoặc mờ rồi. Bác cầm chắc tay và chụp lại giúp cháu nhé ạ."
+   - Nếu không tìm thấy vật thể/sản phẩm: Gán "status": "not_found", "item_type": "unknown", speech_text: "Dạ thưa Bác, cháu chưa tìm thấy sản phẩm hoặc vỏ thuốc trong ảnh. Bác đưa bao bì lại gần camera và chụp lại nhé ạ."
    - Nếu đọc được rõ ràng: Gán "status": "success".
 
-4. FORMAT ĐỌC THẠO MỒNG MỘT (speech_text):
+4. PHÂN BIỆT RÕ RÀNG 'CÔNG DỤNG' VÀ 'HƯỚNG DẪN CÁCH DÙNG / LIỀU LƯỢNG':
+   - "usage_summary": Tóm tắt công dụng / lợi ích chính của sản phẩm trong 1 câu ngắn gọn (ví dụ: "Thuốc điều trị tăng huyết áp vô căn", "Dầu gội giúp làm sạch và mượt tóc").
+   - "usage_instructions": Ghi rõ cách dùng và liều lượng tìm thấy trên bao bì.
+     * QUY TẮC BẮT BUỘC: Nếu trên vỏ hộp không ghi rõ liều dùng/liều lượng, trường usage_instructions BẮT BUỘC phải trả về chính xác chuỗi: "Chưa thấy thông tin liều dùng trên mặt ảnh này. Bác nên dùng theo chỉ định của bác sĩ hoặc đơn thuốc nhé ạ."
+
+5. CẢNH BÁO AN TOÀN (safety_alert):
+   - Chỉ điền thông tin khi có cảnh báo nguy hiểm thực sự (như sản phẩm hết hạn, chống chỉ định, lưu ý đặc biệt có hại).
+   - Nếu sản phẩm bình thường, không có cảnh báo gì đặc biệt, để chuỗi rỗng: "".
+
+6. FORMAT ĐỌC THẠO MỒNG MỘT (speech_text):
    - Lời thoại phải NGẮN GỌN (dưới 40 từ), lễ phép (dùng "Bác", "Cháu"), đọc chậm rãi.
    - Phiên âm tên tiếng Anh khó đọc sang cách đọc tiếng Việt dễ hiểu (Ví dụ: Paracetamol -> Pa-ra-se-ta-mol, Panadol -> Pa-na-đon, Amlodipine -> Am-lô-đi-pin, Sunsilk -> Săn-sêu).
-   - Cuối câu luôn dùng từ "ạ", tuyệt đối không dùng "nhé ạ" hay "nhé Bác".
+   - Cuối câu luôn lễ phép, ngắn gọn.
 `;
 
       const contents: any = [];
@@ -188,7 +197,15 @@ YÊU CẦU XỬ LÝ NGUYÊN TẮC VÀ EDGE CASES:
           },
           usage_summary: {
             type: Type.STRING,
-            description: "Tóm tắt công dụng/cách dùng trong 1 câu ngắn",
+            description: "Tóm tắt công dụng / lợi ích chính của sản phẩm trong 1 câu ngắn gọn",
+          },
+          usage_instructions: {
+            type: Type.STRING,
+            description: "Hướng dẫn liều dùng/cách dùng. Nếu không có trên mặt ảnh thì trả về: 'Chưa thấy thông tin liều dùng trên mặt ảnh này. Bác nên dùng theo chỉ định của bác sĩ hoặc đơn thuốc nhé ạ.'",
+          },
+          safety_alert: {
+            type: Type.STRING,
+            description: "Cảnh báo nguy hiểm hoặc lưu ý đặc biệt nếu có. Để rỗng '' nếu không có cảnh báo nào.",
           },
           speech_text: {
             type: Type.STRING,
@@ -202,6 +219,8 @@ YÊU CẦU XỬ LÝ NGUYÊN TẮC VÀ EDGE CASES:
           "expiry_date",
           "is_expired",
           "usage_summary",
+          "usage_instructions",
+          "safety_alert",
           "speech_text",
         ],
       };
@@ -242,6 +261,12 @@ YÊU CẦU XỬ LÝ NGUYÊN TẮC VÀ EDGE CASES:
             const expiryDate = rawJson.expiry_date || "Không tìm thấy";
             const isExpired = Boolean(rawJson.is_expired);
             const usageSummary = rawJson.usage_summary || "";
+            const usageInstructions = rawJson.usage_instructions || (
+              status === "success"
+                ? "Chưa thấy thông tin liều dùng trên mặt ảnh này. Bác nên dùng theo chỉ định của bác sĩ hoặc đơn thuốc nhé ạ."
+                : ""
+            );
+            const safetyAlert = rawJson.safety_alert || (isExpired ? `CẢNH BÁO NGUY HIỂM: Sản phẩm ĐÃ HẾT HẠN SỬ DỤNG (${expiryDate})!` : "");
             const speechText = rawJson.speech_text || "";
 
             const expiryStatus = isExpired
@@ -256,6 +281,8 @@ YÊU CẦU XỬ LÝ NGUYÊN TẮC VÀ EDGE CASES:
               expiry_date: expiryDate,
               is_expired: isExpired,
               usage_summary: usageSummary,
+              usage_instructions: usageInstructions,
+              safety_alert: safetyAlert,
               speech_text: speechText,
 
               // Backward-compatible UI fields
@@ -263,11 +290,8 @@ YÊU CẦU XỬ LÝ NGUYÊN TẮC VÀ EDGE CASES:
               product_name: itemName,
               primary_purpose: usageSummary,
               primary_function: usageSummary,
-              usage_instruction: usageSummary,
-              how_to_use: usageSummary,
-              safety_alert: isExpired
-                ? `CẢNH BÁO NGUY HIỂM: Sản phẩm ĐÃ HẾT HẠN SỬ DỤNG (${expiryDate})!`
-                : "Bác nhớ dùng đúng hướng dẫn và giữ nơi khô ráo thoáng mát ạ.",
+              usage_instruction: usageInstructions,
+              how_to_use: usageInstructions,
               speech_script: speechText,
               expiration_info: {
                 status: expiryStatus,
