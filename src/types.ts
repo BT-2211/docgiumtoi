@@ -1,0 +1,40 @@
+export type ItemCategory = 'MEDICINE' | 'HOUSEHOLD_GOOD';
+export type ExpiryStatus = 'VALID' | 'EXPIRED' | 'UNCLEAR';
+
+export interface ExpirationInfo {
+  status: ExpiryStatus;
+  expiry_date_text: string;
+  mfg_date_text?: string;
+  days_remaining_text?: string;
+  location_found?: string;
+}
+
+export interface MedicineAnalysisResult {
+  item_category: ItemCategory;
+  product_name: string;
+  primary_purpose?: string;
+  primary_function?: string;
+  expiration_info: ExpirationInfo;
+  usage_instruction?: string;
+  how_to_use?: string;
+  safety_alert: string;
+  speech_script: string;
+}
+
+export interface ScannedRecord {
+  id: string;
+  timestamp: number;
+  imagePreview?: string;
+  result: MedicineAnalysisResult;
+  notes?: string;
+}
+
+export type AppTab = 'camera' | 'history' | 'settings';
+
+export interface SeniorSettings {
+  autoReadSound: boolean;
+  speechRate: number; // 0.85 = Chậm rãi, 1.0 = Vừa phải
+  fontSizeScale: number; // 1.0 = Chuẩn, 1.15 = Lớn, 1.3 = Rất lớn
+  soundFeedback: boolean;
+}
+

@@ -1,0 +1,11 @@
+{
+  "name": "ĐọcGiùmTôi",
+  "description": "Trợ lý y tế thông minh bằng giọng nói và thị giác dành riêng cho người cao tuổi Việt Nam để đọc vỏ thuốc, đơn thuốc và lịch uống dễ dàng.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
