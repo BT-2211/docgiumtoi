@@ -206,94 +206,84 @@ YÊU CẦU XỬ LÝ NGUYÊN TẮC VÀ EDGE CASES:
         ],
       };
 
-      // List of supported Gemini models, prioritizing active official models
+      // List of supported Gemini models, prioritizing active, highly available official models
       const candidateModels = [
-        "gemini-3.7-flash",
         "gemini-3.1-flash-lite",
         "gemini-flash-latest",
+        "gemini-2.5-flash",
+        "gemini-3.7-flash",
       ];
 
       let lastError: any = null;
       let parsedData: any = null;
 
       for (const modelName of candidateModels) {
-        // Attempt with retry
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            console.log(`Analyzing image with model: ${modelName} (attempt ${attempt})...`);
-            const response = await ai.models.generateContent({
-              model: modelName,
-              contents: { parts: contents },
-              config: {
-                systemInstruction:
-                  "Bạn là Trợ lý AI đọc chữ dành cho người cao tuổi và người mắt kém tại Việt Nam. Phân tích chính xác và trả về JSON thuần theo schema.",
-                responseMimeType: "application/json",
-                responseSchema: responseSchemaConfig,
+        try {
+          console.log(`Analyzing image with model: ${modelName}...`);
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: { parts: contents },
+            config: {
+              systemInstruction:
+                "Bạn là Trợ lý AI đọc chữ dành cho người cao tuổi và người mắt kém tại Việt Nam. Phân tích chính xác và trả về JSON thuần theo schema.",
+              responseMimeType: "application/json",
+              responseSchema: responseSchemaConfig,
+            },
+          });
+
+          const resultText = response.text?.trim();
+          if (resultText) {
+            const rawJson = JSON.parse(resultText);
+
+            // Normalize & populate complete structure
+            const status = rawJson.status || "success";
+            const itemType = rawJson.item_type || "medicine";
+            const itemName = rawJson.item_name || "Sản phẩm";
+            const expiryDate = rawJson.expiry_date || "Không tìm thấy";
+            const isExpired = Boolean(rawJson.is_expired);
+            const usageSummary = rawJson.usage_summary || "";
+            const speechText = rawJson.speech_text || "";
+
+            const expiryStatus = isExpired
+              ? "EXPIRED"
+              : (expiryDate && !expiryDate.toLowerCase().includes("không") ? "VALID" : "UNCLEAR");
+
+            parsedData = {
+              // Exact requested JSON keys
+              status: status,
+              item_type: itemType,
+              item_name: itemName,
+              expiry_date: expiryDate,
+              is_expired: isExpired,
+              usage_summary: usageSummary,
+              speech_text: speechText,
+
+              // Backward-compatible UI fields
+              item_category: itemType === "medicine" ? "MEDICINE" : "HOUSEHOLD_GOOD",
+              product_name: itemName,
+              primary_purpose: usageSummary,
+              primary_function: usageSummary,
+              usage_instruction: usageSummary,
+              how_to_use: usageSummary,
+              safety_alert: isExpired
+                ? `CẢNH BÁO NGUY HIỂM: Sản phẩm ĐÃ HẾT HẠN SỬ DỤNG (${expiryDate})!`
+                : "Bác nhớ dùng đúng hướng dẫn và giữ nơi khô ráo thoáng mát ạ.",
+              speech_script: speechText,
+              expiration_info: {
+                status: expiryStatus,
+                expiry_date_text: expiryDate && !expiryDate.toLowerCase().includes("không")
+                  ? `HSD: ${expiryDate}`
+                  : "Không thấy rõ HSD",
+                days_remaining_text: isExpired ? "Đã quá hạn sử dụng" : "Còn hạn sử dụng",
               },
-            });
-
-            const resultText = response.text?.trim();
-            if (resultText) {
-              const rawJson = JSON.parse(resultText);
-
-              // Normalize & populate complete structure
-              const status = rawJson.status || "success";
-              const itemType = rawJson.item_type || "medicine";
-              const itemName = rawJson.item_name || "Sản phẩm";
-              const expiryDate = rawJson.expiry_date || "Không tìm thấy";
-              const isExpired = Boolean(rawJson.is_expired);
-              const usageSummary = rawJson.usage_summary || "";
-              const speechText = rawJson.speech_text || "";
-
-              const expiryStatus = isExpired
-                ? "EXPIRED"
-                : (expiryDate && !expiryDate.toLowerCase().includes("không") ? "VALID" : "UNCLEAR");
-
-              parsedData = {
-                // Exact requested JSON keys
-                status: status,
-                item_type: itemType,
-                item_name: itemName,
-                expiry_date: expiryDate,
-                is_expired: isExpired,
-                usage_summary: usageSummary,
-                speech_text: speechText,
-
-                // Backward-compatible UI fields
-                item_category: itemType === "medicine" ? "MEDICINE" : "HOUSEHOLD_GOOD",
-                product_name: itemName,
-                primary_purpose: usageSummary,
-                primary_function: usageSummary,
-                usage_instruction: usageSummary,
-                how_to_use: usageSummary,
-                safety_alert: isExpired
-                  ? `CẢNH BÁO NGUY HIỂM: Sản phẩm ĐÃ HẾT HẠN SỬ DỤNG (${expiryDate})!`
-                  : "Bác nhớ dùng đúng hướng dẫn và giữ nơi khô ráo thoáng mát ạ.",
-                speech_script: speechText,
-                expiration_info: {
-                  status: expiryStatus,
-                  expiry_date_text: expiryDate && !expiryDate.toLowerCase().includes("không")
-                    ? `HSD: ${expiryDate}`
-                    : "Không thấy rõ HSD",
-                  days_remaining_text: isExpired ? "Đã quá hạn sử dụng" : "Còn hạn sử dụng",
-                },
-              };
-              break;
-            }
-          } catch (err: any) {
-            lastError = err;
-            console.warn(`Model ${modelName} attempt ${attempt} failed:`, err?.message || err);
-            
-            // If high demand (503), rate limit (429), or overloaded, wait briefly or try next
-            if (attempt < 2) {
-              await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
-            }
+            };
+            console.log(`Successfully analyzed item using model: ${modelName}`);
+            break; // Successfully got parsed response!
           }
-        }
-
-        if (parsedData) {
-          console.log(`Successfully analyzed item using model: ${modelName}`);
-          break; // Successfully got parsed response!
+        } catch (err: any) {
+          lastError = err;
+          console.warn(`Model ${modelName} failed, failing over to next model:`, err?.message || err);
+          // Immediately try next candidate model without stalling
         }
       }
 
