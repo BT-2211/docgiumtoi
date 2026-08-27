@@ -59,6 +59,38 @@ async function startServer() {
     res.json({ status: "ok", app: "ĐọcGiùmTôi" });
   });
 
+  // Vietnamese TTS Audio Proxy endpoint
+  app.get("/api/tts", async (req, res) => {
+    try {
+      const text = ((req.query.text as string) || "").trim();
+      if (!text) {
+        return res.status(400).send("Text is required");
+      }
+
+      const encoded = encodeURIComponent(text);
+      const googleTTSUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encoded}&tl=vi&client=tw-ob`;
+
+      const response = await fetch(googleTTSUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "https://translate.google.com/",
+        },
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).send("TTS upstream error");
+      }
+
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      const arrayBuffer = await response.arrayBuffer();
+      res.send(Buffer.from(arrayBuffer));
+    } catch (err: any) {
+      console.error("TTS proxy error:", err);
+      res.status(500).send("Failed to generate TTS audio");
+    }
+  });
+
   // Analyze medicine image/prescription endpoint
   app.post("/api/analyze-medicine", async (req, res) => {
     try {
@@ -72,27 +104,44 @@ async function startServer() {
 
       const ai = getAI();
 
-      const isExpiryFocus = scanMode === 'EXPIRATION_FOCUS';
+      const now = new Date();
+      const currentDateStr = now.toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }); // DD/MM/YYYY
+      const currentIsoDate = now.toISOString().split("T")[0]; // YYYY-MM-DD
 
       const prompt = `
-You are "ĐọcGiùmTôi", an empathetic AI assistant for Vietnamese seniors reading medicine boxes, food bottles, personal care items, and household goods.
+Bạn là Trợ lý AI đọc chữ dành cho người cao tuổi và người mắt kém tại Việt Nam.
+Nhiệm vụ của bạn là phân tích hình ảnh được chụp và trả về kết quả dạng JSON chuẩn xác 100%.
 
-TASK:
-Analyze the uploaded image. Extract product identity, usage instructions, and specifically LOCATE AND VERIFY EXPIRATION DATES (Hạn Sử Dụng / HSD / EXP / Best Before / BBE / NSX).
-${isExpiryFocus ? `\n[CHẾ ĐỘ CHUYÊN SOI HẠN SỬ DỤNG - EXPIRATION FOCUS]:
-- Tập trung cao độ tìm kiếm mọi vết in mờ, dập nổi kim loại (embossed), in phun chấm (dot-matrix), in trên nắp chai, đáy hộp, đuôi tuýp kem/thuốc mỡ, viền mép vỉ thuốc hoặc mép bao bì.
-- Tính toán rõ ràng thời gian còn lại hoặc thời gian đã quá hạn tính đến năm hiện tại (2026).` : ''}
+THÔNG TIN THỜI GIAN HỆ THỐNG:
+- NGÀY HIỆN TẠI: ${currentDateStr} (Định dạng Quốc tế: ${currentIsoDate}).
 
-RULES:
-1. Identify the item as "MEDICINE" or "HOUSEHOLD_GOOD".
-2. Locate and parse any expiration date (e.g., 'HSD: 12/2026', 'EXP: 15/10/2026', '24 tháng kể từ NSX'). If faded or missing, explicitly state "Không thấy rõ HSD".
-3. Provide details for 'expiration_info':
-   - 'status': "VALID" (còn hạn), "EXPIRED" (hết hạn), "UNCLEAR" (mờ/không thấy)
-   - 'expiry_date_text': Chuỗi ngày HSD (ví dụ: 'HSD: 15/10/2026' hoặc 'Không thấy rõ HSD')
-   - 'mfg_date_text': Ngày sản xuất nếu thấy (ví dụ: 'NSX: 15/10/2024')
-   - 'days_remaining_text': Thời gian ước tính (ví dụ: 'Còn khoảng 8 tháng' hoặc 'Đã hết hạn 2 tháng trước')
-   - 'location_found': Vị trí tìm thấy (ví dụ: 'Đáy chai', 'Trên nắp', 'Đuôi vỉ thuốc', 'Mặt sau hộp')
-4. Keep spoken scripts extremely concise, warm, and clear for Text-to-Speech (TTS) playback in Vietnamese. Always mention product name, purpose, and CLEARLY STATE THE EXPIRATION DATE in a loving tone ("Dạ thưa Bác...").
+YÊU CẦU XỬ LÝ NGUYÊN TẮC VÀ EDGE CASES:
+
+1. NHẬN DIỆN NGỮ CẢNH (item_type):
+   - Nếu là thuốc/y tế -> set "medicine".
+   - Nếu là thực phẩm/hộp bánh/chai nước/dầu gội/hàng tiêu dùng -> set "food_or_consumer".
+   - Nếu là ảnh không rõ ràng/không phải vật phẩm -> set "unknown".
+
+2. XỬ LÝ HẠN SỬ DỤNG (EXP / MFG):
+   - So sánh Hạn sử dụng (EXP) tìm thấy với NGÀY HIỆN TẠI (${currentDateStr}).
+   - Nếu HẠN SỬ DỤNG < NGÀY HIỆN TẠI: Gán "is_expired": true và tạo LỜI CẢNH BÁO BÁO ĐỘNG trong lời thoại.
+   - Chấp nhận tất cả định dạng ngày: DD/MM/YYYY, MM/DD/YYYY, YYYY.MM.DD, EXP0526, MFG/EXP.
+   - Nếu không tìm thấy hoặc bị mờ: Gán "expiry_date": "Không tìm thấy", "is_expired": false.
+
+3. XỬ LÝ EDGE CASES (Ảnh mờ, Lóa sáng, Run tay, Bấm nhầm):
+   - Nếu ảnh quá lóa, bị mất nét do run tay, hoặc không thấy rõ chữ: Gán "status": "unclear".
+   - Lời thoại (speech_text) phải nhắc lịch sự: "Bác ơi, ảnh bị lóa hoặc mờ rồi. Bác cầm chắc tay và chụp lại giúp cháu ạ."
+   - Nếu không tìm thấy vật thể/sản phẩm: Gán "status": "not_found", "item_type": "unknown".
+   - Nếu đọc được rõ ràng: Gán "status": "success".
+
+4. FORMAT ĐỌC THẠO MỒNG MỘT (speech_text):
+   - Lời thoại phải NGẮN GỌN (dưới 40 từ), lễ phép (dùng "Bác", "Cháu"), đọc chậm rãi.
+   - Phiên âm tên tiếng Anh khó đọc sang cách đọc tiếng Việt dễ hiểu (Ví dụ: Paracetamol -> Pa-ra-se-ta-mol, Panadol -> Pa-na-đon, Amlodipine -> Am-lô-đi-pin, Sunsilk -> Săn-sêu).
+   - Cuối câu luôn dùng từ "ạ", tuyệt đối không dùng "nhé ạ" hay "nhé Bác".
 `;
 
       const contents: any = [];
@@ -115,67 +164,45 @@ RULES:
       const responseSchemaConfig = {
         type: Type.OBJECT,
         properties: {
-          item_category: {
+          status: {
             type: Type.STRING,
-            enum: ["MEDICINE", "HOUSEHOLD_GOOD"],
-            description: "Detect whether the item is 'MEDICINE' or 'HOUSEHOLD_GOOD'",
+            enum: ["success", "unclear", "not_found"],
+            description: "Trạng thái phân tích: 'success', 'unclear' (ảnh mờ/lóa/run), hoặc 'not_found'",
           },
-          product_name: {
+          item_type: {
             type: Type.STRING,
-            description: "Clear item name, e.g., 'Dầu gội Sunsilk' or 'Thuốc Amlodipine'",
+            enum: ["medicine", "food_or_consumer", "unknown"],
+            description: "Loại vật phẩm: 'medicine', 'food_or_consumer', hoặc 'unknown'",
           },
-          primary_purpose: {
+          item_name: {
             type: Type.STRING,
-            description: "Clear purpose, e.g., 'Dùng để gội đầu' or 'Thuốc trị huyết áp'",
+            description: "Tên sản phẩm/thuốc rõ ràng, kèm phiên âm nếu là tiếng Anh",
           },
-          expiration_info: {
-            type: Type.OBJECT,
-            properties: {
-              status: {
-                type: Type.STRING,
-                enum: ["VALID", "EXPIRED", "UNCLEAR"],
-                description: "VALID if within expiry date, EXPIRED if past expiry date, UNCLEAR if faded or missing",
-              },
-              expiry_date_text: {
-                type: Type.STRING,
-                description: "Date string parsed, e.g., 'HSD: 15/10/2026' or 'Không thấy rõ HSD'",
-              },
-              mfg_date_text: {
-                type: Type.STRING,
-                description: "Manufacturing date if found, e.g. 'NSX: 01/2024'",
-              },
-              days_remaining_text: {
-                type: Type.STRING,
-                description: "Remaining or expired time text, e.g. 'Còn khoảng 8 tháng' or 'Đã quá hạn 2 tháng'",
-              },
-              location_found: {
-                type: Type.STRING,
-                description: "Location where date was spotted, e.g. 'In ở đáy chai' or 'Góc dưới mặt sau'",
-              },
-            },
-            required: ["status", "expiry_date_text"],
-          },
-          usage_instruction: {
+          expiry_date: {
             type: Type.STRING,
-            description: "Simple 1-sentence instruction",
+            description: "Hạn sử dụng DD/MM/YYYY hoặc 'Không tìm thấy'",
           },
-          safety_alert: {
-            type: Type.STRING,
-            description: "Critical warning or 'CẢNH BÁO: Hàng đã HẾT HẠN!'",
+          is_expired: {
+            type: Type.BOOLEAN,
+            description: "true nếu HSD trước ngày hiện tại, false nếu còn hạn",
           },
-          speech_script: {
+          usage_summary: {
             type: Type.STRING,
-            description: "Warm, concise spoken Vietnamese script for automatic audio playback",
+            description: "Tóm tắt công dụng/cách dùng trong 1 câu ngắn",
+          },
+          speech_text: {
+            type: Type.STRING,
+            description: "Đoạn văn hoàn chỉnh dưới 40 từ để ứng dụng đọc thành tiếng cho người già nghe",
           },
         },
         required: [
-          "item_category",
-          "product_name",
-          "primary_purpose",
-          "expiration_info",
-          "usage_instruction",
-          "safety_alert",
-          "speech_script",
+          "status",
+          "item_type",
+          "item_name",
+          "expiry_date",
+          "is_expired",
+          "usage_summary",
+          "speech_text",
         ],
       };
 
@@ -187,19 +214,19 @@ RULES:
       ];
 
       let lastError: any = null;
-      let parsedData: MedicineAnalysisResult | null = null;
+      let parsedData: any = null;
 
       for (const modelName of candidateModels) {
         // Attempt with retry
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
-            console.log(`Analyzing medicine with model: ${modelName} (attempt ${attempt})...`);
+            console.log(`Analyzing image with model: ${modelName} (attempt ${attempt})...`);
             const response = await ai.models.generateContent({
               model: modelName,
               contents: { parts: contents },
               config: {
                 systemInstruction:
-                  "Bạn là chuyên gia trợ lý y tế ĐọcGiùmTôi tận tâm, ân cần phục vụ người cao tuổi Việt Nam. Trả lời luôn luôn theo đúng cấu trúc JSON được định nghĩa.",
+                  "Bạn là Trợ lý AI đọc chữ dành cho người cao tuổi và người mắt kém tại Việt Nam. Phân tích chính xác và trả về JSON thuần theo schema.",
                 responseMimeType: "application/json",
                 responseSchema: responseSchemaConfig,
               },
@@ -207,14 +234,50 @@ RULES:
 
             const resultText = response.text?.trim();
             if (resultText) {
-              parsedData = JSON.parse(resultText) as MedicineAnalysisResult;
-              // Ensure backwards compatibility
-              if (parsedData) {
-                parsedData.primary_function = parsedData.primary_purpose || parsedData.primary_function || '';
-                parsedData.primary_purpose = parsedData.primary_purpose || parsedData.primary_function || '';
-                parsedData.how_to_use = parsedData.usage_instruction || parsedData.how_to_use || '';
-                parsedData.usage_instruction = parsedData.usage_instruction || parsedData.how_to_use || '';
-              }
+              const rawJson = JSON.parse(resultText);
+
+              // Normalize & populate complete structure
+              const status = rawJson.status || "success";
+              const itemType = rawJson.item_type || "medicine";
+              const itemName = rawJson.item_name || "Sản phẩm";
+              const expiryDate = rawJson.expiry_date || "Không tìm thấy";
+              const isExpired = Boolean(rawJson.is_expired);
+              const usageSummary = rawJson.usage_summary || "";
+              const speechText = rawJson.speech_text || "";
+
+              const expiryStatus = isExpired
+                ? "EXPIRED"
+                : (expiryDate && !expiryDate.toLowerCase().includes("không") ? "VALID" : "UNCLEAR");
+
+              parsedData = {
+                // Exact requested JSON keys
+                status: status,
+                item_type: itemType,
+                item_name: itemName,
+                expiry_date: expiryDate,
+                is_expired: isExpired,
+                usage_summary: usageSummary,
+                speech_text: speechText,
+
+                // Backward-compatible UI fields
+                item_category: itemType === "medicine" ? "MEDICINE" : "HOUSEHOLD_GOOD",
+                product_name: itemName,
+                primary_purpose: usageSummary,
+                primary_function: usageSummary,
+                usage_instruction: usageSummary,
+                how_to_use: usageSummary,
+                safety_alert: isExpired
+                  ? `CẢNH BÁO NGUY HIỂM: Sản phẩm ĐÃ HẾT HẠN SỬ DỤNG (${expiryDate})!`
+                  : "Bác nhớ dùng đúng hướng dẫn và giữ nơi khô ráo thoáng mát ạ.",
+                speech_script: speechText,
+                expiration_info: {
+                  status: expiryStatus,
+                  expiry_date_text: expiryDate && !expiryDate.toLowerCase().includes("không")
+                    ? `HSD: ${expiryDate}`
+                    : "Không thấy rõ HSD",
+                  days_remaining_text: isExpired ? "Đã quá hạn sử dụng" : "Còn hạn sử dụng",
+                },
+              };
               break;
             }
           } catch (err: any) {
@@ -229,7 +292,7 @@ RULES:
         }
 
         if (parsedData) {
-          console.log(`Successfully analyzed medicine using model: ${modelName}`);
+          console.log(`Successfully analyzed item using model: ${modelName}`);
           break; // Successfully got parsed response!
         }
       }

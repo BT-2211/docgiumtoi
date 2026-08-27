@@ -1,5 +1,5 @@
-import React from 'react';
-import { History, Volume2, Trash2, ChevronRight, Clock, Sparkles, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { History, Volume2, Trash2, ChevronRight, Clock, Sparkles, AlertTriangle, X } from 'lucide-react';
 import { ScannedRecord, SeniorSettings } from '../types';
 import { speechService } from '../services/speechService';
 
@@ -18,6 +18,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   onDeleteRecord,
   onClearAll,
 }) => {
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
   const formatTime = (ts: number) => {
     const date = new Date(ts);
     return date.toLocaleDateString('vi-VN', {
@@ -34,8 +36,16 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     speechService.speak(script, settings.speechRate);
   };
 
+  const handleConfirmClear = () => {
+    onClearAll();
+    setShowConfirmModal(false);
+    if (settings.soundFeedback) {
+      speechService.playFeedbackSound('alert');
+    }
+  };
+
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col gap-6 pb-28 pt-2 px-3 sm:px-4">
+    <div className="w-full max-w-2xl mx-auto flex flex-col gap-6 pb-28 pt-2 px-3 sm:px-4 relative">
       {/* Header Info */}
       <div className="flex items-center justify-between bg-white border-4 border-[#E65F2B]/15 p-6 rounded-[32px] sm:rounded-[36px] shadow-xl shadow-orange-500/5">
         <div className="flex items-center gap-3.5">
@@ -60,14 +70,56 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         {records.length > 0 && (
           <button
             id="btn-clear-history"
-            onClick={onClearAll}
-            className="flex items-center gap-1.5 bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-full font-black text-xs sm:text-sm hover:bg-red-100 active:scale-95 transition-all uppercase tracking-wider"
+            onClick={() => setShowConfirmModal(true)}
+            className="flex items-center gap-1.5 bg-red-50 text-red-600 border border-red-200 px-4 py-2.5 rounded-full font-black text-xs sm:text-sm hover:bg-red-100 active:scale-95 transition-all uppercase tracking-wider cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
             <span>Xóa hết</span>
           </button>
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white border-4 border-[#E65F2B] rounded-[32px] p-6 sm:p-8 max-w-md w-full shadow-2xl flex flex-col gap-5 text-center">
+            <div className="w-16 h-16 rounded-full bg-[#E65F2B]/15 text-[#E65F2B] mx-auto flex items-center justify-center">
+              <AlertTriangle className="w-9 h-9 stroke-[2.75]" />
+            </div>
+
+            <div>
+              <h3 className="text-2xl sm:text-3xl font-black text-[#1A1A1A] tracking-tight uppercase">
+                Xóa Hết Tủ Đồ Đã Đọc?
+              </h3>
+              <p className="text-base sm:text-lg font-bold text-gray-600 mt-2 leading-relaxed">
+                Bác có chắc chắn muốn xóa toàn bộ lịch sử đọc thuốc và đồ dùng không ạ?
+              </p>
+              <p className="text-xs sm:text-sm font-semibold text-red-500 mt-1">
+                (Dữ liệu sau khi xóa sẽ không thể phục hồi lại được)
+              </p>
+            </div>
+
+            {/* Buttons: Left = Cancel (Không), Right = Orange Delete (Xóa) */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                id="btn-cancel-clear-history"
+                onClick={() => setShowConfirmModal(false)}
+                className="min-h-[58px] bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-lg rounded-[20px] border-2 border-gray-300 active:scale-95 transition-all cursor-pointer"
+              >
+                Không, giữ lại
+              </button>
+
+              <button
+                id="btn-confirm-clear-history"
+                onClick={handleConfirmClear}
+                className="min-h-[58px] bg-[#E65F2B] hover:bg-[#d85320] text-white font-black text-lg rounded-[20px] shadow-lg shadow-orange-500/25 active:scale-95 transition-all uppercase tracking-wide cursor-pointer"
+              >
+                Xóa Hết
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Empty State */}
       {records.length === 0 ? (

@@ -49,11 +49,11 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
     if (!mentionsHSD && result.expiration_info) {
       let hsdSpoken = '';
       if (result.expiration_info.status === 'EXPIRED') {
-        hsdSpoken = ` Cảnh báo: Sản phẩm này ĐÃ HẾT HẠN SỬ DỤNG (${result.expiration_info.expiry_date_text}), Bác tuyệt đối không được dùng nữa nhé!`;
+        hsdSpoken = ` Cảnh báo: Sản phẩm này ĐÃ HẾT HẠN SỬ DỤNG (${result.expiration_info.expiry_date_text}), Bác tuyệt đối không được dùng nữa ạ!`;
       } else if (result.expiration_info.status === 'VALID') {
-        hsdSpoken = ` Về hạn sử dụng: Sản phẩm còn hạn dùng, ${result.expiration_info.expiry_date_text} Bác nhé.`;
+        hsdSpoken = ` Về hạn sử dụng: Sản phẩm còn hạn dùng, ${result.expiration_info.expiry_date_text} ạ.`;
       } else {
-        hsdSpoken = ` Về hạn sử dụng: Trên bao bì không thấy rõ ngày hết hạn, Bác nên nhờ người nhà kiểm tra lại nhé.`;
+        hsdSpoken = ` Về hạn sử dụng: Trên bao bì không thấy rõ ngày hết hạn, Bác nên nhờ người nhà kiểm tra lại ạ.`;
       }
       script = `${script} ${hsdSpoken}`;
     }
@@ -101,11 +101,11 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
     e.stopPropagation();
     let text = '';
     if (result.expiration_info?.status === 'EXPIRED') {
-      text = `Dạ Bác ơi! Sản phẩm ${result.product_name} này ĐÃ HẾT HẠN SỬ DỤNG từ ${result.expiration_info.expiry_date_text}. Bác tuyệt đối không được dùng nữa để bảo vệ sức khỏe nhé ạ!`;
+      text = `Dạ Bác ơi! Sản phẩm ${result.product_name} này ĐÃ HẾT HẠN SỬ DỤNG từ ${result.expiration_info.expiry_date_text}. Bác tuyệt đối không được dùng nữa để bảo vệ sức khỏe ạ!`;
     } else if (result.expiration_info?.status === 'VALID') {
-      text = `Dạ thưa Bác! Sản phẩm ${result.product_name} CÒN HẠN SỬ DỤNG đến ${result.expiration_info.expiry_date_text} Bác nhé.`;
+      text = `Dạ thưa Bác! Sản phẩm ${result.product_name} CÒN HẠN SỬ DỤNG đến ${result.expiration_info.expiry_date_text} ạ.`;
     } else {
-      text = `Dạ thưa Bác! Trên bao bì sản phẩm ${result.product_name} hiện không thấy rõ ngày hết hạn. Bác nên nhờ con cháu kiểm tra lại trước khi dùng nhé ạ.`;
+      text = `Dạ thưa Bác! Trên bao bì sản phẩm ${result.product_name} hiện không thấy rõ ngày hết hạn. Bác nên nhờ con cháu kiểm tra lại trước khi dùng ạ.`;
     }
     speechService.speak(text, settings.speechRate);
   };
@@ -217,7 +217,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
               )}
               {isUnclear && (
                 <p className="text-amber-800 font-bold text-sm sm:text-base mt-1">
-                  Ngày in trên nhãn bị mờ hoặc không in. Bác nên nhờ con cháu kiểm tra lại nhé.
+                  Ngày in trên nhãn bị mờ hoặc không in. Bác nên nhờ con cháu kiểm tra lại ạ.
                 </p>
               )}
             </div>

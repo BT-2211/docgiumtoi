@@ -1,6 +1,7 @@
 import React from 'react';
 import { Volume2, VolumeX, Plus, Minus, HeartPulse } from 'lucide-react';
 import { SeniorSettings } from '../types';
+import { speechService } from '../services/speechService';
 
 interface TopAppBarProps {
   settings: SeniorSettings;
@@ -9,7 +10,15 @@ interface TopAppBarProps {
 
 export const TopAppBar: React.FC<TopAppBarProps> = ({ settings, onUpdateSettings }) => {
   const toggleSound = () => {
-    onUpdateSettings({ autoReadSound: !settings.autoReadSound });
+    const nextSoundState = !settings.autoReadSound;
+    onUpdateSettings({ autoReadSound: nextSoundState });
+    if (!nextSoundState) {
+      speechService.stop();
+      speechService.setMuted(true);
+    } else {
+      speechService.setMuted(false);
+      speechService.playFeedbackSound('beep');
+    }
   };
 
   const scaleSteps = [1.0, 1.15, 1.3, 1.45];

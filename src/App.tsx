@@ -16,7 +16,7 @@ import { speechService } from './services/speechService';
 
 const DEFAULT_SETTINGS: SeniorSettings = {
   autoReadSound: true,
-  speechRate: 0.85,
+  speechRate: 1.0,
   fontSizeScale: 1.0,
   soundFeedback: true,
 };
@@ -71,6 +71,16 @@ export default function App() {
     document.documentElement.style.fontSize = `${100 * scale}%`;
   }, [settings.fontSizeScale]);
 
+  // Sync mute state with settings.autoReadSound
+  useEffect(() => {
+    speechService.setMuted(!settings.autoReadSound);
+  }, [settings.autoReadSound]);
+
+  // Stop any reading immediately when switching tabs
+  useEffect(() => {
+    speechService.stop();
+  }, [activeTab]);
+
   // Persist history
   const saveRecordToHistory = (result: MedicineAnalysisResult, imagePreview?: string) => {
     const newRecord: ScannedRecord = {
@@ -104,13 +114,11 @@ export default function App() {
   };
 
   const handleClearAllHistory = () => {
-    if (window.confirm('Bác có chắc chắn muốn xóa toàn bộ lịch sử đọc thuốc không ạ?')) {
-      setHistoryRecords([]);
-      try {
-        localStorage.removeItem(STORAGE_KEYS.HISTORY);
-      } catch (e) {
-        console.error('Failed to clear history:', e);
-      }
+    setHistoryRecords([]);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.HISTORY);
+    } catch (e) {
+      console.error('Failed to clear history:', e);
     }
   };
 

@@ -7,8 +7,6 @@ import {
   Heart,
   Play,
   Check,
-  ShieldCheck,
-  HelpCircle,
   Camera,
   CameraOff,
   CheckCircle2,
@@ -28,8 +26,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   onUpdateSettings,
 }) => {
-  const [selectedVoice, setSelectedVoice] = useState<'Vietnamese Female' | 'Vietnamese Male'>('Vietnamese Female');
-
   // Camera permission states in Settings
   const [cameraPermissionStatus, setCameraPermissionStatus] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
   const [isTestingCamera, setIsTestingCamera] = useState<boolean>(false);
@@ -38,9 +34,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const testVideoRef = useRef<HTMLVideoElement | null>(null);
   const testStreamRef = useRef<MediaStream | null>(null);
 
-  // Check initial camera permission and load active voice
+  // Check initial camera permission
   useEffect(() => {
-    setSelectedVoice(speechService.getSelectedVoiceName());
     const checkPermission = async () => {
       try {
         if (navigator.permissions && navigator.permissions.query) {
@@ -58,6 +53,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     return () => {
       stopTestCamera();
+      speechService.stop();
     };
   }, []);
 
@@ -114,18 +110,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const handleVoiceChange = (voice: 'Vietnamese Female' | 'Vietnamese Male') => {
-    setSelectedVoice(voice);
-    speechService.setSelectedVoiceName(voice);
+  const handleTestVoice = () => {
+    speechService.stop();
+    const testText =
+      'Dạ thưa Bác! Cháu là trợ lý Đọc Giùm Tôi. Cháu luôn sẵn sàng đọc to rõ ràng tên thuốc, công dụng, cách dùng và hạn sử dụng giúp Bác ạ.';
+    speechService.speak(testText, settings.speechRate);
+  };
+
+  const handleRateChange = (rate: number) => {
+    speechService.stop();
+    onUpdateSettings({ speechRate: rate });
     if (settings.soundFeedback) {
       speechService.playFeedbackSound('beep');
     }
-  };
-
-  const handleTestVoice = () => {
-    const testText =
-      'Dạ thưa Bác! Cháu là trợ lý Đọc Giùm Tôi. Cháu luôn sẵn sàng đọc to rõ ràng tên thuốc, công dụng, cách dùng và đặc biệt là Hạn Sử Dụng giúp Bác ạ.';
-    speechService.speak(testText, 0.9, selectedVoice);
   };
 
   return (
@@ -140,7 +137,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             Cài Đặt Trợ Lý
           </h2>
           <p className="text-sm sm:text-base font-bold text-gray-500 mt-0.5">
-            Cấp quyền máy ảnh, chỉnh cỡ chữ và giọng nói sao cho Bác dễ dùng nhất
+            Cấp quyền máy ảnh, chỉnh cỡ chữ và tốc độ đọc sao cho Bác dễ dùng nhất
           </p>
         </div>
       </div>
@@ -184,45 +181,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </span>
         </div>
 
-        <p className="text-base sm:text-lg font-bold text-gray-600">
-          Máy ảnh dùng để chụp và soi hạn sử dụng, tên thuốc, chai dầu gội và thực phẩm. Bác có thể bấm cấp quyền hoặc kiểm tra lại bất cứ lúc nào:
+        {/* Short, clear, high-contrast description (min 16px) */}
+        <p className="text-base sm:text-lg font-bold text-[#1A1A1A] leading-relaxed">
+          Máy ảnh giúp Bác chụp và đọc thông tin trên vỏ thuốc.
         </p>
 
-        {/* Live Mini Camera Test Preview */}
-        {isTestingCamera && (
-          <div className="relative w-full aspect-[16/9] bg-black rounded-[24px] overflow-hidden border-3 border-[#E65F2B] shadow-md flex items-center justify-center">
-            <video
-              ref={testVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute top-3 left-3 bg-[#137333] text-white px-3.5 py-1 rounded-full text-xs font-black flex items-center gap-1.5 shadow-md">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>MÁY ẢNH HOẠT ĐỘNG TỐT!</span>
-            </div>
-            <button
-              onClick={stopTestCamera}
-              className="absolute bottom-3 right-3 bg-black/70 text-white text-xs font-bold px-3 py-1.5 rounded-full hover:bg-black"
-            >
-              Đóng xem thử
-            </button>
-          </div>
-        )}
-
-        {/* Success message */}
-        {cameraTestSuccess && !isTestingCamera && (
-          <div className="bg-[#E6F4EA] border-2 border-[#34A853]/40 p-4 rounded-[20px] flex items-center gap-3 text-[#137333]">
-            <CheckCircle2 className="w-6 h-6 shrink-0" />
-            <p className="text-base font-bold">
-              Tuyệt vời! Máy ảnh đã được kết nối thành công. Bác có thể quay lại tab <strong>Chụp & Soi HSD</strong> để dùng ngay.
-            </p>
-          </div>
-        )}
-
-        {/* Error / Denied message with instructions */}
-        {cameraErrorMessage && (
+        {/* Error / Denied message with instructions if permission was rejected */}
+        {cameraErrorMessage && cameraPermissionStatus !== 'granted' && (
           <div className="bg-red-50 border-2 border-red-200 p-4 rounded-[20px] flex flex-col gap-2 text-red-900">
             <div className="flex items-center gap-2 font-black text-base text-red-700">
               <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -233,77 +198,81 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <Lock className="w-4 h-4 text-red-600" />
                 <span>Cách mở lại quyền nếu bị chặn trên trình duyệt:</span>
               </p>
-              <p>1. Bấm vào biểu tượng ổ khóa 🔒 hoặc biểu tượng camera 📷 trên thanh địa chỉ web (góc trên cùng màn hình).</p>
-              <p>2. Chọn <strong>"Quyền trang web"</strong> (Site settings) hoặc tìm mục <strong>"Máy ảnh / Camera"</strong>.</p>
+              <p>1. Bấm vào biểu tượng ổ khóa 🔒 hoặc biểu tượng camera 📷 trên thanh địa chỉ web.</p>
+              <p>2. Chọn <strong>"Quyền trang web"</strong> (Site settings) hoặc tìm mục <strong>"Máy ảnh"</strong>.</p>
               <p>3. Đổi sang <strong>"Cho phép" (Allow)</strong> rồi bấm nút màu cam bên dưới để thử lại.</p>
             </div>
           </div>
         )}
 
-        {/* Action Button */}
-        <button
-          id="btn-request-camera-permission"
-          onClick={handleRequestAndTestCamera}
-          className="w-full min-h-[64px] bg-[#E65F2B] hover:bg-[#d85320] text-white font-black text-xl rounded-[22px] flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg shadow-orange-500/25 uppercase tracking-wide cursor-pointer"
-        >
-          {isTestingCamera ? (
-            <>
-              <RefreshCw className="w-6 h-6 animate-spin" />
-              <span>ĐANG KÍCH HOẠT MÁY ẢNH...</span>
-            </>
-          ) : (
-            <>
-              <Camera className="w-7 h-7 stroke-[2.75]" />
-              <span>
-                {cameraPermissionStatus === 'granted'
-                  ? 'KIỂM TRA HOẠT ĐỘNG MÁY ẢNH'
-                  : 'CẤP QUYỀN MÁY ẢNH NGAY'}
-              </span>
-            </>
-          )}
-        </button>
+        {/* Conditional state: Ready text if granted, Action button if not granted */}
+        {cameraPermissionStatus === 'granted' ? (
+          <div
+            id="status-camera-granted"
+            className="w-full min-h-[56px] bg-[#F5F5F3] border border-gray-200/90 rounded-[22px] px-5 py-3.5 flex items-center gap-3 text-gray-700"
+          >
+            <CheckCircle2 className="w-6 h-6 text-[#137333] shrink-0" />
+            <span className="text-base sm:text-lg font-bold text-gray-700">
+              Máy ảnh đã sẵn sàng hoạt động
+            </span>
+          </div>
+        ) : (
+          <button
+            id="btn-request-camera-permission"
+            onClick={handleRequestAndTestCamera}
+            className="w-full min-h-[64px] bg-[#E65F2B] hover:bg-[#d85320] text-white font-black text-xl rounded-[22px] flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg shadow-orange-500/25 uppercase tracking-wide cursor-pointer"
+          >
+            {isTestingCamera ? (
+              <>
+                <RefreshCw className="w-6 h-6 animate-spin" />
+                <span>ĐANG KÍCH HOẠT MÁY ẢNH...</span>
+              </>
+            ) : (
+              <>
+                <Camera className="w-7 h-7 stroke-[2.75]" />
+                <span>CHO PHÉP MỞ MÁY ẢNH</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
-      {/* 1. VIETNAMESE VOICE SELECTION & STATUS */}
+      {/* 1. TỐC ĐỘ GIỌNG ĐỌC TIẾNG VIỆT (3 MỨC LỰA CHỌN) */}
       <div className="bg-white border-2 border-gray-200/90 p-6 sm:p-7 rounded-[32px] flex flex-col gap-4 shadow-xs">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 text-[#1A1A1A]">
-            <Volume2 className="w-7 h-7 text-[#137333]" strokeWidth={2.75} />
-            <h3 className="text-2xl font-black uppercase tracking-tight">Giọng Đọc Tiếng Việt</h3>
-          </div>
-          <span className="bg-[#E6F4EA] text-[#137333] border border-[#34A853]/40 text-xs font-black px-3 py-1 rounded-full uppercase">
-            ResponsiveVoice Chuẩn Tiếng Việt
-          </span>
+        <div className="flex items-center gap-3 text-[#1A1A1A]">
+          <Volume2 className="w-7 h-7 text-[#137333]" strokeWidth={2.75} />
+          <h3 className="text-2xl font-black uppercase tracking-tight">Tốc Độ Giọng Đọc</h3>
         </div>
 
         <p className="text-base sm:text-lg font-bold text-gray-600">
-          Chọn giọng đọc tiếng Việt rõ ràng, truyền cảm mà Bác cảm thấy dễ nghe nhất:
+          Giọng đọc Tiếng Việt chuẩn 100%. Chọn tốc độ đọc phù hợp với tai của Bác:
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { id: 'Vietnamese Female', label: '👩 Giọng Nữ Miền Nam / Bắc', desc: 'Dịu dàng, phát âm chuẩn' },
-            { id: 'Vietnamese Male', label: '👨 Giọng Nam Trầm Ấm', desc: 'Rõ ràng, dõng dạc' },
-          ].map((voiceOption) => {
-            const isSelected = selectedVoice === voiceOption.id;
+            { rate: 0.75, label: '🐢 Chậm (0.75x)', desc: 'Rất chậm, rõ từng chữ' },
+            { rate: 1.0, label: '🚶 Vừa (1.0x)', desc: 'Chuẩn, dễ nghe (Khuyên dùng)' },
+            { rate: 1.25, label: '⚡ Nhanh (1.25x)', desc: 'Tiết kiệm thời gian' },
+          ].map((item) => {
+            const isSelected = Math.abs(settings.speechRate - item.rate) < 0.05;
             return (
               <button
-                key={voiceOption.id}
-                id={`btn-voice-${voiceOption.id.replace(/\s+/g, '-').toLowerCase()}`}
-                onClick={() => handleVoiceChange(voiceOption.id as any)}
-                className={`min-h-[72px] rounded-[24px] p-4 font-black text-left flex items-center justify-between transition-all active:scale-95 cursor-pointer ${
+                key={item.rate}
+                id={`btn-rate-${item.rate}`}
+                onClick={() => handleRateChange(item.rate)}
+                className={`min-h-[80px] rounded-[24px] p-3.5 font-black text-center flex flex-col items-center justify-center transition-all active:scale-95 cursor-pointer ${
                   isSelected
                     ? 'bg-[#137333] text-white shadow-lg shadow-green-700/25 ring-4 ring-green-500/20'
                     : 'bg-[#FDFBF7] text-[#1A1A1A] border-2 border-gray-300 hover:border-[#137333] hover:bg-gray-50'
                 }`}
               >
-                <div>
-                  <div className="text-lg font-black">{voiceOption.label}</div>
-                  <div className={`text-xs font-bold ${isSelected ? 'text-white/80' : 'text-gray-500'}`}>
-                    {voiceOption.desc}
-                  </div>
+                <div className="flex items-center gap-1.5 text-lg font-black">
+                  {isSelected && <Check className="w-5 h-5 stroke-[3] shrink-0" />}
+                  <span>{item.label}</span>
                 </div>
-                {isSelected && <Check className="w-6 h-6 stroke-[3] text-white shrink-0" />}
+                <span className={`text-xs font-bold mt-0.5 ${isSelected ? 'text-white/90' : 'text-gray-500'}`}>
+                  {item.desc}
+                </span>
               </button>
             );
           })}
@@ -316,7 +285,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           className="w-full min-h-[60px] bg-[#137333] text-white hover:bg-[#0f5c29] font-black text-lg rounded-[20px] flex items-center justify-center gap-3 active:scale-95 transition-all shadow-md shadow-green-600/20 uppercase tracking-wider cursor-pointer"
         >
           <Play className="w-5 h-5 fill-current" />
-          <span>🔊 BẤM NGHE THỬ GIỌNG TIẾNG VIỆT</span>
+          <span>🔊 BẤM NGHE THỬ GIỌNG ĐỌC</span>
         </button>
       </div>
 
@@ -376,49 +345,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* 3. SPEECH RATE ADJUSTMENT */}
-      <div className="bg-white border-2 border-gray-200/90 p-6 sm:p-7 rounded-[32px] flex flex-col gap-4 shadow-xs">
-        <div className="flex items-center gap-3 text-[#1A1A1A]">
-          <Volume2 className="w-7 h-7 text-[#E65F2B]" strokeWidth={2.75} />
-          <h3 className="text-2xl font-black uppercase tracking-tight">Tốc Độ Giọng Đọc</h3>
-        </div>
-
-        <p className="text-base sm:text-lg font-bold text-gray-600">
-          Chọn tốc độ đọc hướng dẫn:
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[
-            { rate: 0.85, label: '🐢 Chậm Rãi (Khuyên dùng)' },
-            { rate: 1.0, label: '⚡ Bình Thường' },
-          ].map((item) => (
-            <button
-              key={item.rate}
-              onClick={() => onUpdateSettings({ speechRate: item.rate })}
-              className={`min-h-[64px] rounded-[20px] font-black text-lg flex items-center justify-center gap-2 p-3 text-center transition-all active:scale-95 cursor-pointer ${
-                Math.abs(settings.speechRate - item.rate) < 0.05
-                  ? 'bg-[#E65F2B] text-white shadow-lg shadow-orange-500/25'
-                  : 'bg-[#FDFBF7] text-[#1A1A1A] border-2 border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              {Math.abs(settings.speechRate - item.rate) < 0.05 && <Check className="w-5 h-5 stroke-[3] shrink-0" />}
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Test voice button */}
-        <button
-          id="btn-test-voice-secondary"
-          onClick={handleTestVoice}
-          className="w-full min-h-[58px] bg-[#E65F2B]/10 text-[#E65F2B] hover:bg-[#E65F2B]/20 font-black text-lg rounded-[20px] flex items-center justify-center gap-3 active:scale-95 transition-all mt-1 uppercase tracking-wider cursor-pointer"
-        >
-          <Play className="w-5 h-5 fill-current" />
-          <span>🔊 Thử Nghe Giọng Đọc Mẫu</span>
-        </button>
-      </div>
-
-      {/* 4. AUTO-PLAY SOUND TOGGLE */}
+      {/* 3. AUTO-PLAY SOUND TOGGLE */}
       <div className="bg-white border-2 border-gray-200/90 p-6 sm:p-7 rounded-[32px] flex items-center justify-between gap-4 shadow-xs">
         <div>
           <h3 className="text-xl sm:text-2xl font-black text-[#1A1A1A] uppercase tracking-tight">
@@ -431,7 +358,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         <button
           id="btn-toggle-auto-read"
-          onClick={() => onUpdateSettings({ autoReadSound: !settings.autoReadSound })}
+          onClick={() => {
+            const nextSoundState = !settings.autoReadSound;
+            onUpdateSettings({ autoReadSound: nextSoundState });
+            if (!nextSoundState) {
+              speechService.stop();
+              speechService.setMuted(true);
+            } else {
+              speechService.setMuted(false);
+              speechService.playFeedbackSound('beep');
+            }
+          }}
           className={`w-20 h-11 rounded-full transition-colors relative flex items-center px-1 shrink-0 cursor-pointer ${
             settings.autoReadSound ? 'bg-[#E65F2B]' : 'bg-gray-300'
           }`}
@@ -444,7 +381,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </div>
 
-      {/* 5. EMERGENCY HOTLINES FOR SENIORS */}
+      {/* 4. EMERGENCY HOTLINES FOR SENIORS */}
       <div className="bg-white border-2 border-red-200 p-6 sm:p-7 rounded-[32px] flex flex-col gap-4 shadow-xs">
         <div className="flex items-center gap-3 text-red-600">
           <PhoneCall className="w-8 h-8 shrink-0" strokeWidth={2.75} />
@@ -474,7 +411,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* 6. ABOUT THE APP */}
+      {/* 5. ABOUT THE APP */}
       <div className="bg-[#E6F4EA] border-2 border-[#34A853]/30 p-5 rounded-[24px] flex items-center gap-4 text-center justify-center shadow-xs">
         <Heart className="w-7 h-7 text-red-500 fill-current shrink-0" />
         <p className="text-base text-[#137333] font-bold text-left">
@@ -484,4 +421,3 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     </div>
   );
 };
-

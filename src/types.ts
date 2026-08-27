@@ -10,6 +10,16 @@ export interface ExpirationInfo {
 }
 
 export interface MedicineAnalysisResult {
+  // New standardized AI schema fields
+  status?: 'success' | 'unclear' | 'not_found';
+  item_type?: 'medicine' | 'food_or_consumer' | 'unknown';
+  item_name?: string;
+  expiry_date?: string;
+  is_expired?: boolean;
+  usage_summary?: string;
+  speech_text?: string;
+
+  // App UI & backward compatibility fields
   item_category: ItemCategory;
   product_name: string;
   primary_purpose?: string;

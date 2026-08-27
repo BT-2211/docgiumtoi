@@ -1,64 +1,34 @@
-// ResponsiveVoice Type Definition
-declare global {
-  interface Window {
-    responsiveVoice?: {
-      speak: (
-        text: string,
-        voice?: string,
-        parameters?: {
-          pitch?: number;
-          rate?: number;
-          volume?: number;
-          onstart?: () => void;
-          onend?: () => void;
-          onerror?: (e: any) => void;
-        }
-      ) => void;
-      cancel: () => void;
-      pause?: () => void;
-      resume?: () => void;
-      isPlaying: () => boolean;
-      voiceSupport: () => boolean;
-      getVoices: () => Array<{ name: string; flag: string; gender: string; lang: string }>;
-    };
-  }
-}
-
-export type ResponsiveVoiceGender = 'Vietnamese Female' | 'Vietnamese Male';
+/**
+ * Speech Service chuẩn hóa 100% Tiếng Việt qua Google Translate TTS (tl=vi).
+ * Đơn giản, tin cậy, không phụ thuộc Web Speech API trình duyệt.
+ */
 
 class SpeechService {
   private isSpeaking: boolean = false;
   private isPaused: boolean = false;
-  private selectedVoiceName: ResponsiveVoiceGender = 'Vietnamese Female';
+  private isMuted: boolean = false;
   private onStateChangeCallbacks: Set<(state: { isSpeaking: boolean; isPaused: boolean }) => void> = new Set();
   private audioCtx: AudioContext | null = null;
 
-  // Sentence-by-sentence playback queue for reliable pause/resume and zero cutoff
+  // Session ID to completely eliminate audio overlap
+  private sessionId: number = 0;
+
+  // Queue xử lý phát âm thanh từng câu
   private currentSentences: string[] = [];
   private currentSentenceIndex: number = 0;
-  private currentRate: number = 0.9;
-  private currentVoice: ResponsiveVoiceGender = 'Vietnamese Female';
+  private currentRate: number = 1.0;
+  private currentAudio: HTMLAudioElement | null = null;
   private playbackTimer: any = null;
 
-  constructor() {
-    if (typeof window !== 'undefined') {
-      const savedVoice = localStorage.getItem('docgiumtoi_rv_voice');
-      if (savedVoice === 'Vietnamese Male' || savedVoice === 'Vietnamese Female') {
-        this.selectedVoiceName = savedVoice;
-      }
+  public setMuted(muted: boolean) {
+    this.isMuted = muted;
+    if (muted) {
+      this.stop();
     }
   }
 
-  public getSelectedVoiceName(): ResponsiveVoiceGender {
-    return this.selectedVoiceName;
-  }
-
-  public setSelectedVoiceName(voiceName: ResponsiveVoiceGender) {
-    this.selectedVoiceName = voiceName;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('docgiumtoi_rv_voice', voiceName);
-    }
-    this.notify();
+  public getIsMuted(): boolean {
+    return this.isMuted;
   }
 
   public subscribe(callback: (state: { isSpeaking: boolean; isPaused: boolean }) => void) {
@@ -75,30 +45,25 @@ class SpeechService {
     );
   }
 
-  /**
-   * Split full text into meaningful phrases and sentences so ResponsiveVoice never cuts off,
-   * and pause/resume operates instantly and precisely.
-   */
   private splitIntoSentences(text: string): string[] {
     if (!text) return [];
-    // Clean text
-    const clean = text.replace(/\s+/g, ' ').trim();
-    
-    // Split by sentence terminators (. ! ? : \n) while keeping meaningful lengths
+    let clean = text
+      .replace(/\s+/g, ' ')
+      .replace(/nhé\s+ạ/gi, 'ạ')
+      .replace(/nhé\s+Bác/gi, 'ạ')
+      .replace(/Bác\s+nhé/gi, 'ạ')
+      .trim();
     const parts = clean.split(/(?<=[.!?:\n])\s+/);
     const result: string[] = [];
-    
+
     for (const part of parts) {
       const trimmed = part.trim();
       if (trimmed.length > 0) {
-        // If an individual clause is overly long (>180 chars), split by comma/semicolon
-        if (trimmed.length > 180) {
+        if (trimmed.length > 140) {
           const subParts = trimmed.split(/(?<=[,;])\s+/);
           for (const sub of subParts) {
             const subTrimmed = sub.trim();
-            if (subTrimmed.length > 0) {
-              result.push(subTrimmed);
-            }
+            if (subTrimmed.length > 0) result.push(subTrimmed);
           }
         } else {
           result.push(trimmed);
@@ -108,45 +73,36 @@ class SpeechService {
     return result.length > 0 ? result : [clean];
   }
 
-  /**
-   * Main speech output using ResponsiveVoice JS with resilient sentence chunking
-   */
-  public speak(
-    text: string,
-    rate = 0.9,
-    voice?: ResponsiveVoiceGender
-  ) {
+  public speak(text: string, rate = 0.85) {
     if (!text || text.trim().length === 0) return;
+    if (this.isMuted) return;
 
-    // Stop and clear previous playback
     this.stop();
 
-    this.currentVoice = voice || this.selectedVoiceName || 'Vietnamese Female';
-    this.currentRate = rate || 0.9;
+    this.sessionId++;
+    const currentSession = this.sessionId;
+
+    this.currentRate = rate || 0.85;
     this.currentSentences = this.splitIntoSentences(text);
     this.currentSentenceIndex = 0;
     this.isSpeaking = true;
     this.isPaused = false;
     this.notify();
 
-    this.playNextSentence();
+    this.playNextSentence(currentSession);
   }
 
-  /**
-   * Play the current sentence in the queue
-   */
-  private playNextSentence() {
+  private playNextSentence(session: number) {
     if (this.playbackTimer) {
       clearTimeout(this.playbackTimer);
       this.playbackTimer = null;
     }
 
-    if (!this.isSpeaking || this.isPaused) {
+    if (this.sessionId !== session || !this.isSpeaking || this.isPaused || this.isMuted) {
       return;
     }
 
     if (this.currentSentenceIndex >= this.currentSentences.length) {
-      // Completed all sentences
       this.isSpeaking = false;
       this.isPaused = false;
       this.currentSentences = [];
@@ -156,150 +112,150 @@ class SpeechService {
     }
 
     const sentence = this.currentSentences[this.currentSentenceIndex];
+    const encodedText = encodeURIComponent(sentence);
 
-    if (typeof window !== 'undefined' && window.responsiveVoice) {
-      try {
-        window.responsiveVoice.speak(sentence, this.currentVoice, {
-          rate: this.currentRate,
-          pitch: 1.0,
-          onstart: () => {
-            if (!this.isPaused) {
-              this.isSpeaking = true;
-              this.notify();
-            }
-          },
-          onend: () => {
-            if (!this.isPaused && this.isSpeaking) {
-              this.currentSentenceIndex++;
-              // Conversational 180ms pause between sentences
-              this.playbackTimer = setTimeout(() => {
-                this.playNextSentence();
-              }, 180);
-            }
-          },
-          onerror: (e) => {
-            console.warn('ResponsiveVoice chunk error:', e);
-            if (!this.isPaused && this.isSpeaking) {
-              this.currentSentenceIndex++;
-              this.playNextSentence();
-            }
-          },
-        });
-      } catch (err) {
-        console.error('Error invoking responsiveVoice.speak:', err);
-        this.fallbackSpeakSentence(sentence);
+    // Dùng đường dẫn Google TTS Tiếng Việt chuẩn 100% qua proxy server
+    const audioUrl = `/api/tts?text=${encodedText}`;
+
+    try {
+      if (this.currentAudio) {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+        this.currentAudio.src = '';
+        this.currentAudio = null;
       }
-    } else {
-      this.fallbackSpeakSentence(sentence);
-    }
-  }
 
-  private fallbackSpeakSentence(sentence: string) {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(sentence);
-        utterance.lang = 'vi-VN';
-        utterance.rate = this.currentRate;
-        utterance.onstart = () => {
-          if (!this.isPaused) {
-            this.isSpeaking = true;
-            this.notify();
-          }
-        };
-        utterance.onend = () => {
-          if (!this.isPaused && this.isSpeaking) {
+      const audio = new Audio(audioUrl);
+      this.currentAudio = audio;
+
+      const rate = this.currentRate || 0.85;
+      audio.defaultPlaybackRate = rate;
+      audio.playbackRate = rate;
+
+      audio.addEventListener('canplay', () => {
+        if (this.sessionId === session && this.currentAudio === audio) {
+          audio.playbackRate = rate;
+        }
+      });
+
+      audio.addEventListener('play', () => {
+        if (this.sessionId === session && this.currentAudio === audio) {
+          audio.playbackRate = rate;
+        }
+      });
+
+      audio.onended = () => {
+        if (this.sessionId === session && this.currentAudio === audio) {
+          this.currentAudio = null;
+          if (!this.isPaused && this.isSpeaking && !this.isMuted) {
             this.currentSentenceIndex++;
             this.playbackTimer = setTimeout(() => {
-              this.playNextSentence();
+              this.playNextSentence(session);
             }, 180);
           }
-        };
-        utterance.onerror = () => {
-          if (!this.isPaused && this.isSpeaking) {
-            this.currentSentenceIndex++;
-            this.playNextSentence();
-          }
-        };
-        window.speechSynthesis.speak(utterance);
-      } catch (e) {
-        console.error('Fallback speech failed:', e);
-      }
-    }
-  }
-
-  /**
-   * Silences all audio output immediately across all engines
-   */
-  private silenceAudio() {
-    if (typeof window !== 'undefined') {
-      try {
-        if (window.responsiveVoice) {
-          window.responsiveVoice.cancel();
         }
-      } catch (e) {
-        console.warn('Error cancelling ResponsiveVoice:', e);
-      }
+      };
 
-      try {
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
+      audio.onerror = () => {
+        // Fallback đường dẫn trực tiếp Google nếu Proxy /api/tts lỗi
+        if (this.sessionId === session && this.currentAudio === audio) {
+          const directUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=vi&client=tw-ob`;
+          const directAudio = new Audio(directUrl);
+          this.currentAudio = directAudio;
+          directAudio.playbackRate = rate;
+
+          directAudio.onended = () => {
+            if (this.sessionId === session && this.currentAudio === directAudio) {
+              this.currentAudio = null;
+              if (!this.isPaused && this.isSpeaking && !this.isMuted) {
+                this.currentSentenceIndex++;
+                this.playbackTimer = setTimeout(() => {
+                  this.playNextSentence(session);
+                }, 180);
+              }
+            }
+          };
+
+          directAudio.onerror = () => {
+            if (this.sessionId === session) {
+              this.currentAudio = null;
+              if (!this.isPaused && this.isSpeaking && !this.isMuted) {
+                this.currentSentenceIndex++;
+                this.playNextSentence(session);
+              }
+            }
+          };
+
+          directAudio.play().catch(() => {
+            if (this.sessionId === session) {
+              this.currentAudio = null;
+              if (!this.isPaused && this.isSpeaking && !this.isMuted) {
+                this.currentSentenceIndex++;
+                this.playNextSentence(session);
+              }
+            }
+          });
         }
-      } catch (e) {
-        console.warn('Error cancelling SpeechSynthesis:', e);
-      }
+      };
 
-      // Stop any orphan HTMLAudioElements if ResponsiveVoice generated them
-      try {
-        const audios = document.querySelectorAll('audio');
-        audios.forEach((a) => {
-          if (!a.paused) {
-            a.pause();
-            a.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Lỗi autoplay audio:', err);
+          if (this.sessionId === session && this.currentAudio === audio) {
+            this.currentAudio = null;
+            if (!this.isPaused && this.isSpeaking && !this.isMuted) {
+              this.currentSentenceIndex++;
+              this.playNextSentence(session);
+            }
           }
         });
-      } catch {
-        // ignore DOM audio cleanup error
+      }
+    } catch (err) {
+      console.warn('Audio initialization error:', err);
+      if (this.sessionId === session) {
+        this.currentSentenceIndex++;
+        this.playNextSentence(session);
       }
     }
   }
 
-  /**
-   * Tạm dừng đọc: Lập tức ngắt tiếng và lưu vị trí câu đang đọc
-   */
   public pause() {
     if (this.playbackTimer) {
       clearTimeout(this.playbackTimer);
       this.playbackTimer = null;
     }
-
-    this.silenceAudio();
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+    }
     this.isPaused = true;
     this.isSpeaking = true;
     this.notify();
   }
 
-  /**
-   * Tiếp tục đọc: Đọc tiếp các câu còn lại từ vị trí đã dừng
-   */
   public resume() {
-    if (!this.isSpeaking) return;
-
+    if (!this.isSpeaking || this.isMuted) return;
     this.isPaused = false;
     this.notify();
-    this.playNextSentence();
+    if (this.currentAudio && this.currentAudio.paused) {
+      this.currentAudio.play();
+    } else {
+      this.playNextSentence(this.sessionId);
+    }
   }
 
-  /**
-   * Dừng đọc hoàn toàn
-   */
   public stop() {
+    this.sessionId++; // Invalidate all pending callbacks from prior sessions
     if (this.playbackTimer) {
       clearTimeout(this.playbackTimer);
       this.playbackTimer = null;
     }
-
-    this.silenceAudio();
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.currentTime = 0;
+      this.currentAudio.src = '';
+      this.currentAudio = null;
+    }
     this.isSpeaking = false;
     this.isPaused = false;
     this.currentSentences = [];
@@ -307,7 +263,8 @@ class SpeechService {
     this.notify();
   }
 
-  public togglePlayPause(text: string, rate = 0.9) {
+  public togglePlayPause(text: string, rate = 0.85) {
+    if (this.isMuted) return;
     if (this.isSpeaking) {
       if (this.isPaused) {
         this.resume();
@@ -319,17 +276,17 @@ class SpeechService {
     }
   }
 
-  public getStatus() {
+  public getState() {
     return {
       isSpeaking: this.isSpeaking,
       isPaused: this.isPaused,
-      voiceName: this.selectedVoiceName === 'Vietnamese Male' ? 'Giọng Nam Tiếng Việt (ResponsiveVoice)' : 'Giọng Nữ Tiếng Việt (ResponsiveVoice)',
-      isResponsiveVoiceReady: typeof window !== 'undefined' && !!window.responsiveVoice,
+      isMuted: this.isMuted,
+      voiceName: 'Giọng Đọc Tiếng Việt Chuẩn',
     };
   }
 
-  // Senior-friendly audio chimes for tactile feedback
-  public playFeedbackSound(type: 'camera' | 'success' | 'alert' | 'beep') {
+  public playFeedbackSound(type: 'beep' | 'success' | 'alert' | 'shutter' | 'camera' = 'beep') {
+    if (this.isMuted) return;
     try {
       if (!this.audioCtx) {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -337,6 +294,7 @@ class SpeechService {
           this.audioCtx = new AudioContextClass();
         }
       }
+
       if (!this.audioCtx) return;
 
       if (this.audioCtx.state === 'suspended') {
@@ -344,48 +302,74 @@ class SpeechService {
       }
 
       const now = this.audioCtx.currentTime;
-      const osc = this.audioCtx.createOscillator();
-      const gain = this.audioCtx.createGain();
 
-      osc.connect(gain);
-      gain.connect(this.audioCtx.destination);
-
-      if (type === 'camera') {
+      if (type === 'shutter' || type === 'camera') {
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.exponentialRampToValueAtTime(110, now + 0.08);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.09);
-        osc.start(now);
-        osc.stop(now + 0.1);
-      } else if (type === 'success') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, now);
-        osc.frequency.setValueAtTime(659.25, now + 0.12);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
-        osc.start(now);
-        osc.stop(now + 0.35);
-      } else if (type === 'alert') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(330, now);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
-        osc.start(now);
-        osc.stop(now + 0.25);
-      } else {
-        osc.type = 'sine';
         osc.frequency.setValueAtTime(800, now);
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+        osc.frequency.exponentialRampToValueAtTime(200, now + 0.12);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
+        osc.connect(gain);
+        gain.connect(this.audioCtx.destination);
         osc.start(now);
-        osc.stop(now + 0.1);
+        osc.stop(now + 0.13);
+        return;
       }
-    } catch {
-      // Audio context might be restricted before user gesture
+
+      if (type === 'beep') {
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(660, now);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+        osc.connect(gain);
+        gain.connect(this.audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.11);
+        return;
+      }
+
+      if (type === 'success') {
+        const osc1 = this.audioCtx.createOscillator();
+        const osc2 = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        osc1.type = 'sine';
+        osc2.type = 'sine';
+        osc1.frequency.setValueAtTime(523.25, now);
+        osc2.frequency.setValueAtTime(659.25, now + 0.1);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(this.audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.1);
+        osc2.start(now + 0.1);
+        osc2.stop(now + 0.25);
+        return;
+      }
+
+      if (type === 'alert') {
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(330, now + 0.15);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain);
+        gain.connect(this.audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.32);
+        return;
+      }
+    } catch (e) {
+      console.warn('Audio feedback failed:', e);
     }
   }
 }
 
 export const speechService = new SpeechService();
-

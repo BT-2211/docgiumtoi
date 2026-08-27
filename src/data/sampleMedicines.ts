@@ -31,7 +31,7 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
       usage_instruction: 'Mỗi ngày uống 1 lần, mỗi lần 1 viên sau khi ăn sáng no.',
       how_to_use: 'Mỗi ngày uống 1 lần, mỗi lần 1 viên sau khi ăn sáng no.',
       safety_alert: 'Không uống khi bụng đói, tránh ăn bưởi chùm và uống vào một giờ cố định mỗi ngày.',
-      speech_script: 'Dạ thưa Bác! Đây là thuốc Amlodipine 5mg, dùng để điều trị và ổn định huyết áp. Về hạn sử dụng: Thuốc còn hạn dùng đến tháng 10 năm 2027, còn hơn 1 năm nữa nên rất an toàn. Mỗi ngày Bác uống một viên vào buổi sáng sau khi ăn no Bác nhé.'
+      speech_script: 'Dạ thưa Bác! Đây là thuốc Amlodipine 5mg, dùng để điều trị và ổn định huyết áp. Về hạn sử dụng: Thuốc còn hạn dùng đến tháng 10 năm 2027, còn hơn 1 năm nữa nên rất an toàn. Mỗi ngày Bác uống một viên vào buổi sáng sau khi ăn no ạ.'
     }
   },
   {
@@ -55,7 +55,7 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
       usage_instruction: 'Làm ướt tóc, lấy một lượng vừa đủ xoa đều tạo bọt rồi xả sạch với nước.',
       how_to_use: 'Làm ướt tóc, lấy một lượng vừa đủ xoa đều tạo bọt rồi xả sạch với nước.',
       safety_alert: 'CẢNH BÁO: Chỉ dùng ngoài da, tuyệt đối không được uống và tránh để bọt dính vào mắt.',
-      speech_script: 'Dạ thưa Bác! Đây là chai dầu gội đầu Sunsilk để gội đầu, không phải thuốc uống. Về hạn sử dụng: Chai còn hạn dùng đến tháng 8 năm 2026. Bác thoa lên tóc ướt rồi xả sạch với nước. Bác nhớ cẩn thận đừng để xà phòng dính vào mắt nhé ạ.'
+      speech_script: 'Dạ thưa Bác! Đây là chai dầu gội đầu Sunsilk để gội đầu, không phải thuốc uống. Về hạn sử dụng: Chai còn hạn dùng đến tháng 8 năm 2026. Bác thoa lên tóc ướt rồi xả sạch với nước. Bác nhớ cẩn thận đừng để xà phòng dính vào mắt ạ.'
     }
   },
   {
@@ -79,7 +79,7 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
       usage_instruction: 'Sản phẩm đã quá hạn sử dụng, tuyệt đối không được uống.',
       how_to_use: 'Sản phẩm đã quá hạn sử dụng, tuyệt đối không được uống.',
       safety_alert: 'CẢNH BÁO NGUY HIỂM: Hộp sữa này ĐÃ HẾT HẠN! Bác không được uống để tránh bị đau bụng ngộ độc.',
-      speech_script: 'Dạ Bác ơi, cháu xin cảnh báo: Hộp sữa tươi này ĐÃ HẾT HẠN SỬ DỤNG từ ngày 5 tháng 1 năm 2024 rồi ạ! Bác tuyệt đối không được uống hộp này nữa để tránh bị đau bụng ngộ độc nhé Bác.'
+      speech_script: 'Dạ Bác ơi, cháu xin cảnh báo: Hộp sữa tươi này ĐÃ HẾT HẠN SỬ DỤNG từ ngày 5 tháng 1 năm 2024 rồi ạ! Bác tuyệt đối không được uống hộp này nữa để tránh bị đau bụng ngộ độc ạ.'
     }
   },
   {
@@ -103,7 +103,7 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
       usage_instruction: 'Uống 1 viên sau khi ăn no, mỗi lần uống cách nhau ít nhất 4 đến 6 tiếng.',
       how_to_use: 'Uống 1 viên sau khi ăn no, mỗi lần uống cách nhau ít nhất 4 đến 6 tiếng.',
       safety_alert: 'Không uống quá 4 viên trong 24 giờ. Tránh uống vào buổi tối muộn vì có chất gây khó ngủ.',
-      speech_script: 'Dạ thưa Bác! Đây là thuốc Panadol Extra đỏ giúp Bác giảm đau nhức và hạ sốt. Về hạn sử dụng: Thuốc còn hạn đến tháng 12 năm 2026. Khi đau nhức, Bác uống một viên sau khi ăn no. Bác không uống quá 4 viên một ngày và tránh uống buổi tối muộn nhé ạ.'
+      speech_script: 'Dạ thưa Bác! Đây là thuốc Panadol Extra đỏ giúp Bác giảm đau nhức và hạ sốt. Về hạn sử dụng: Thuốc còn hạn đến tháng 12 năm 2026. Khi đau nhức, Bác uống một viên sau khi ăn no. Bác không uống quá 4 viên một ngày và tránh uống buổi tối muộn ạ.'
     }
   },
   {
@@ -127,7 +127,7 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
       usage_instruction: 'Dùng trực tiếp làm nước chấm hoặc nêm một lượng vừa phải vào món ăn.',
       how_to_use: 'Dùng trực tiếp làm nước chấm hoặc nêm một lượng vừa phải vào món ăn.',
       safety_alert: 'Người cao tuổi có bệnh huyết áp hoặc thận nên hạn chế ăn quá mặn.',
-      speech_script: 'Dạ thưa Bác! Đây là chai nước mắm Nam Ngư dùng để nêm nếm thức ăn hoặc làm nước chấm trong bếp. Về hạn sử dụng: Chai còn hạn dùng 12 tháng kể từ khi mở nắp. Vì Bác lớn tuổi nên mình nêm vừa phải, tránh ăn quá mặn sẽ ảnh hưởng đến huyết áp Bác nhé.'
+      speech_script: 'Dạ thưa Bác! Đây là chai nước mắm Nam Ngư dùng để nêm nếm thức ăn hoặc làm nước chấm trong bếp. Về hạn sử dụng: Chai còn hạn dùng 12 tháng kể từ khi mở nắp. Vì Bác lớn tuổi nên mình nêm vừa phải, tránh ăn quá mặn sẽ ảnh hưởng đến huyết áp ạ.'
     }
   },
   {
@@ -150,7 +150,7 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
       usage_instruction: 'Thoa một lượng nhỏ lên vùng da bị đau nhức, thái dương hoặc ngực.',
       how_to_use: 'Thoa một lượng nhỏ lên vùng da bị đau nhức, thái dương hoặc ngực.',
       safety_alert: 'CẢNH BÁO: Không bôi lên vết thương hở, không được uống và tránh xa tầm mắt.',
-      speech_script: 'Dạ thưa Bác! Đây là chai dầu gió xanh Con Ó dùng để xoa bóp ngoài da khi cảm mạo hoặc nhức mỏi. Về hạn sử dụng: Chữ in dưới đáy chai hiện không thấy rõ, Bác nên nhờ người nhà kiểm tra lại trước khi dùng và tuyệt đối không được uống nhé ạ.'
+      speech_script: 'Dạ thưa Bác! Đây là chai dầu gió xanh Con Ó dùng để xoa bóp ngoài da khi cảm mạo hoặc nhức mỏi. Về hạn sử dụng: Chữ in dưới đáy chai hiện không thấy rõ, Bác nên nhờ người nhà kiểm tra lại trước khi dùng và tuyệt đối không được uống ạ.'
     }
   }
 ];
