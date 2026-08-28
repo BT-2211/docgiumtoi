@@ -112,24 +112,49 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
   };
 
   const isSuccess = !result.status || result.status === 'success';
+  const isNeedSecondSide = result.status === 'need_second_side';
+  const isIndividualPack = result.status === 'individual_pack';
+  const isCrossMismatch = result.status === 'cross_product_mismatch' || result.is_cross_mismatch;
   const isUnclear = result.status === 'unclear';
   const isNotFound = result.status === 'not_found';
   const isUnclearOrNotFound = isUnclear || isNotFound;
 
-  const isExpired = result.expiration_info?.status === 'EXPIRED';
-  const isValid = result.expiration_info?.status === 'VALID';
-  const isHsdUnclear = result.expiration_info?.status === 'UNCLEAR';
-  const isMedicine = result.item_type === 'medicine' || result.item_category === 'MEDICINE';
+  const rawType = (result.item_type || result.item_category || '').toUpperCase();
+  const isMedicine = rawType.includes('MEDICINE') || rawType.includes('THUỐC');
+  const isPersonalItem = rawType.includes('PERSONAL') || rawType.includes('VÍ') || rawType.includes('ĐIỆN THOẠI') || rawType.includes('CHÌA KHÓA') || rawType.includes('KÍNH');
+  const isConsumerGoods = !isMedicine && !isPersonalItem;
+
+  const isExpired = Boolean(result.is_expired || result.expiration_info?.status === 'EXPIRED');
+  const isValid = !isExpired && result.expiration_info?.status === 'VALID';
+  const isHsdUnclear = !isExpired && result.expiration_info?.status === 'UNCLEAR';
+  const shouldShowExpiration = isSuccess && !isPersonalItem && result.expiration_info?.status !== 'NOT_APPLICABLE';
 
   const usageSummaryText = result.usage_summary || result.primary_purpose || result.primary_function || '';
+  
+  const defaultUsageFallback = isIndividualPack
+    ? (isMedicine
+      ? 'Nếu Bác không nhớ rõ ngày mua, Bác tuyệt đối không nên uống liều thuốc này để đảm bảo an toàn ạ.'
+      : 'Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ.')
+    : isCrossMismatch
+    ? 'Bác vui lòng lấy đúng sản phẩm lúc nãy và chụp lại mặt sau ạ.'
+    : isMedicine
+    ? 'Bác dùng theo đơn thuốc của bác sĩ hoặc hướng dẫn trên bao bì ạ.'
+    : isPersonalItem
+    ? 'Bác nhớ cất gọn gàng vào nơi quen thuộc để dễ tìm khi cần ạ!'
+    : 'Bảo quản nơi khô ráo thoáng mát và sử dụng theo hướng dẫn ạ.';
+
   const usageInstructionsText =
     result.usage_instructions ||
     result.usage_instruction ||
     result.how_to_use ||
-    'Chưa thấy thông tin liều dùng trên mặt ảnh này. Bác nên dùng theo chỉ định của bác sĩ hoặc đơn thuốc nhé ạ.';
+    defaultUsageFallback;
+
+  // Clean up any remaining 'nhé ạ' phrases in display
+  const cleanedUsageInstructions = usageInstructionsText.replace(/nhé\s+ạ/gi, 'ạ').replace(/nhé\s+bác/gi, 'Bác ạ');
 
   const hasSpecificSafetyAlert =
-    isSuccess &&
+    (isSuccess || isIndividualPack || isCrossMismatch) &&
+    !isExpired &&
     Boolean(
       result.safety_alert &&
         result.safety_alert.trim().length > 0 &&
@@ -138,7 +163,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         !result.safety_alert.toLowerCase().includes('không có lưu ý')
     );
 
-  const speechScriptText = result.speech_text || result.speech_script || '';
+  const speechScriptText = (result.speech_text || result.speech_script || '').replace(/nhé\s+ạ/gi, 'ạ').replace(/nhé\s+bác/gi, 'Bác ạ');
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pb-28 pt-2 px-3 sm:px-4">
@@ -148,13 +173,49 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
           <div className="flex items-center gap-2.5 text-[#137333]">
             <CheckCircle2 className="w-7 h-7 shrink-0" strokeWidth={2.75} />
             <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
-              ĐÃ NHẬN DIỆN NHÃN BAO BÌ
+              {isPersonalItem ? 'ĐÃ NHẬN DIỆN ĐỒ VẬT' : 'ĐÃ NHẬN DIỆN NHÃN BAO BÌ'}
             </span>
           </div>
           <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black bg-[#137333] text-white px-3 py-1.5 rounded-full uppercase tracking-wider shadow-xs">
             <BookmarkCheck className="w-4 h-4" />
             <span>Đã lưu vào tủ</span>
           </div>
+        </div>
+      ) : isCrossMismatch ? (
+        <div className="flex items-center justify-between bg-red-50 border-2 border-red-400 rounded-[24px] px-5 py-3.5 shadow-sm">
+          <div className="flex items-center gap-2.5 text-red-900">
+            <AlertOctagon className="w-7 h-7 text-red-600 shrink-0" strokeWidth={2.75} />
+            <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
+              CHỤP NHẦM SẢN PHẨM KHÁC
+            </span>
+          </div>
+          <span className="text-xs sm:text-sm font-black bg-red-200 text-red-900 px-3 py-1.5 rounded-full uppercase tracking-wider">
+            Khác mặt 1
+          </span>
+        </div>
+      ) : isNeedSecondSide ? (
+        <div className="flex items-center justify-between bg-blue-50 border-2 border-blue-300 rounded-[24px] px-5 py-3.5 shadow-sm">
+          <div className="flex items-center gap-2.5 text-blue-900">
+            <RotateCcw className="w-7 h-7 text-blue-600 shrink-0" strokeWidth={2.75} />
+            <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
+              CẦN CHỤP THÊM MẶT SAU / MẶT ĐÁY
+            </span>
+          </div>
+          <span className="text-xs sm:text-sm font-black bg-blue-200 text-blue-900 px-3 py-1.5 rounded-full uppercase tracking-wider">
+            Chưa thấy HSD
+          </span>
+        </div>
+      ) : isIndividualPack ? (
+        <div className={`flex items-center justify-between ${isMedicine ? 'bg-red-50 border-2 border-red-300' : 'bg-amber-50 border-2 border-amber-300'} rounded-[24px] px-5 py-3.5 shadow-sm`}>
+          <div className={`flex items-center gap-2.5 ${isMedicine ? 'text-red-900' : 'text-amber-900'}`}>
+            <AlertTriangle className={`w-7 h-7 ${isMedicine ? 'text-red-600' : 'text-amber-600'} shrink-0`} strokeWidth={2.75} />
+            <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
+              {isMedicine ? 'VỈ THUỐC XÉ LẺ (KHÔNG HSD)' : 'GÓI BÓC LẺ TỪ HỘP LỚN'}
+            </span>
+          </div>
+          <span className={`text-xs sm:text-sm font-black ${isMedicine ? 'bg-red-200 text-red-900' : 'bg-amber-200 text-amber-900'} px-3 py-1.5 rounded-full uppercase tracking-wider`}>
+            Không in HSD lẻ
+          </span>
         </div>
       ) : (
         <div className="flex items-center justify-between bg-amber-50 border-2 border-amber-300 rounded-[24px] px-5 py-3.5 shadow-sm">
@@ -175,7 +236,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         <div className="bg-white border-4 border-[#E65F2B]/15 rounded-[28px] p-4 flex items-center gap-4 shadow-sm">
           <img
             src={imagePreview}
-            alt="Hình ảnh nhãn sản phẩm"
+            alt="Hình ảnh đồ vật"
             className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-[20px] border-2 border-gray-200 shrink-0"
           />
           <div className="flex-1">
@@ -184,17 +245,82 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             </span>
             <p className="text-base text-[#1A1A1A] font-bold mt-1.5">
               {isSuccess
-                ? 'Đã đọc chính xác nhãn mác và hạn sử dụng cho Bác.'
+                ? (isPersonalItem ? 'Đã nhận diện chính xác đồ vật cá nhân của Bác.' : 'Đã đọc chính xác nhãn mác và hạn sử dụng cho Bác.')
+                : isCrossMismatch
+                ? 'Hình như Bác đang chụp một sản phẩm khác. Bác kiểm tra lại đúng hộp lúc nãy để cháu đọc lại ạ!'
+                : isNeedSecondSide
+                ? 'Đã thấy tên sản phẩm! Nhưng mặt này chưa có hạn dùng. Bác lật mặt sau rồi chụp lại giúp cháu ạ.'
+                : isIndividualPack
+                ? (isMedicine ? 'Vỉ thuốc xé lẻ không có hạn dùng. Bác xem lưu ý an toàn bên dưới ạ!' : 'Đây là gói lẻ không có hạn dùng trên vỏ. Bác xem hộp lớn giúp cháu ạ.')
                 : isUnclear
-                ? 'Ảnh chụp bị lóa hoặc mờ nét do run tay. Bác bấm chụp lại nhé ạ.'
-                : 'Chưa nhận diện được bao bì. Bác để thuốc gần camera và chụp lại nhé ạ.'}
+                ? 'Ảnh chụp bị lóa hoặc mờ nét do run tay. Bác bấm chụp lại giúp cháu ạ.'
+                : 'Chưa nhận diện được đồ vật. Bác để đồ vật lại gần camera và chụp lại giúp cháu ạ.'}
             </p>
           </div>
         </div>
       )}
 
-      {/* 1. EXPIRATION DATE BANNER - Only shown on SUCCESS */}
-      {isSuccess && (
+      {/* SPECIAL PROMPT BANNER FOR CROSS PRODUCT MISMATCH */}
+      {isCrossMismatch && (
+        <div className="bg-red-50 border-4 border-red-500 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md animate-pulse">
+          <div className="flex items-center gap-3 text-red-900">
+            <AlertOctagon className="w-8 h-8 shrink-0 text-red-600" strokeWidth={3} />
+            <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
+              HÌNH NHƯ BÁC ĐANG CHỤP SẢN PHẨM KHÁC RỒI Ạ
+            </h3>
+          </div>
+          <p className="text-lg sm:text-xl font-bold text-red-950 leading-relaxed">
+            Cháu thấy hình này khác với mặt trước lúc nãy. Bác kiểm tra lại đúng hộp sản phẩm lúc nãy rồi bấm nút chụp lại ở dưới để cháu đọc hạn dùng cho Bác ạ!
+          </p>
+        </div>
+      )}
+
+      {/* SPECIAL PROMPT BANNER FOR NEED_SECOND_SIDE */}
+      {isNeedSecondSide && (
+        <div className="bg-blue-50 border-4 border-blue-400 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md">
+          <div className="flex items-center gap-3 text-blue-800">
+            <RotateCcw className="w-8 h-8 shrink-0 text-blue-600" strokeWidth={3} />
+            <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
+              CHƯA THẤY HẠN SỬ DỤNG TRÊN MẶT NÀY
+            </h3>
+          </div>
+          <p className="text-lg sm:text-xl font-bold text-blue-950 leading-relaxed">
+            Cháu đã nhận diện được sản phẩm. Hạn sử dụng thường được in ở <span className="underline decoration-blue-500 font-black">mặt sau, mặt đáy hoặc nắp hộp</span>. Bác lật hộp lại và bấm nút chụp tiếp ở dưới ạ!
+          </p>
+        </div>
+      )}
+
+      {/* SPECIAL SAFETY CARD FOR INDIVIDUAL_PACK (LƯU Ý AN TOÀN BAO BÌ) */}
+      {isIndividualPack && (
+        isMedicine ? (
+          <div className="bg-red-50 border-4 border-red-500 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md">
+            <div className="flex items-center gap-3 text-red-900">
+              <AlertOctagon className="w-8 h-8 shrink-0 text-red-600" strokeWidth={3} />
+              <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
+                CẢNH BÁO ĐỎ: VỈ THUỐC XÉ LẺ KHÔNG HSD
+              </h3>
+            </div>
+            <p className="text-lg sm:text-xl font-bold text-red-950 leading-relaxed">
+              Bác ơi, đây là vỉ thuốc xé lẻ không có thông tin hạn sử dụng. Để đảm bảo an toàn tuyệt đối cho sức khỏe, nếu Bác không nhớ rõ ngày mua, Bác <span className="font-black underline decoration-red-600 text-red-900">tuyệt đối KHÔNG NÊN UỐNG</span> liều thuốc này ạ!
+            </p>
+          </div>
+        ) : (
+          <div className="bg-amber-50 border-4 border-amber-400 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md">
+            <div className="flex items-center gap-3 text-amber-900">
+              <AlertTriangle className="w-8 h-8 shrink-0 text-amber-600" strokeWidth={3} />
+              <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
+                LƯU Ý AN TOÀN BAO BÌ
+              </h3>
+            </div>
+            <p className="text-lg sm:text-xl font-bold text-amber-950 leading-relaxed">
+              Dạ đây là gói <span className="font-black text-amber-900">{result.item_name || result.product_name}</span> lẻ nên không ghi hạn sử dụng trên vỏ ạ. Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ.
+            </p>
+          </div>
+        )
+      )}
+
+      {/* 1. EXPIRATION DATE BANNER - Only shown on SUCCESS for medicines/consumer goods with expiration */}
+      {shouldShowExpiration && (
         <div
           id="card-expiration-date"
           className={`p-6 sm:p-7 rounded-[32px] border-4 flex flex-col gap-4 shadow-md ${
@@ -315,13 +441,27 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         {/* Category Pill */}
         <div className="inline-flex items-center justify-center gap-2 bg-[#FDFBF7] text-[#1A1A1A] border-2 border-gray-200 px-5 py-2 rounded-full mx-auto shadow-xs">
           {isMedicine ? (
-            <Pill className="w-5 h-5 text-red-600" strokeWidth={2.75} />
+            <>
+              <Pill className="w-5 h-5 text-red-600" strokeWidth={2.75} />
+              <span className="text-sm sm:text-base font-black uppercase tracking-wider text-gray-700">
+                💊 THUỐC & DƯỢC PHẨM Y TẾ
+              </span>
+            </>
+          ) : isPersonalItem ? (
+            <>
+              <BookmarkCheck className="w-5 h-5 text-amber-600" strokeWidth={2.75} />
+              <span className="text-sm sm:text-base font-black uppercase tracking-wider text-amber-800">
+                👛 ĐỒ DÙNG CÁ NHÂN
+              </span>
+            </>
           ) : (
-            <ShoppingBag className="w-5 h-5 text-[#2B67E6]" strokeWidth={2.75} />
+            <>
+              <ShoppingBag className="w-5 h-5 text-[#2B67E6]" strokeWidth={2.75} />
+              <span className="text-sm sm:text-base font-black uppercase tracking-wider text-gray-700">
+                🧴 HÀNG TIÊU DÙNG / THỰC PHẨM
+              </span>
+            </>
           )}
-          <span className="text-sm sm:text-base font-black uppercase tracking-wider text-gray-700">
-            {isMedicine ? '💊 THUỐC & DƯỢC PHẨM Y TẾ' : '🧴 HÀNG GIA DỤNG / THỰC PHẨM'}
-          </span>
         </div>
 
         <h2 className="text-3xl sm:text-5xl font-black uppercase text-[#E65F2B] tracking-tight leading-tight">
@@ -333,7 +473,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
           <div className="bg-[#F7F9FC] border-2 border-gray-200/80 rounded-[24px] p-5 sm:p-6 text-left">
             <p className="text-xs uppercase tracking-widest text-[#2B67E6] font-black mb-1.5 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-[#2B67E6]" />
-              <span>CÔNG DỤNG CHÍNH</span>
+              <span>{isPersonalItem ? 'CÔNG DỤNG ĐỒ VẬT' : 'CÔNG DỤNG CHÍNH'}</span>
             </p>
             <p className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] leading-relaxed">
               {usageSummaryText}
@@ -342,17 +482,21 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         )}
       </div>
 
-      {/* 3. HOW TO USE / HƯỚNG DẪN CÁCH DÙNG (ONLY SHOWN ON SUCCESS) */}
-      {isSuccess && (
-        <div className="bg-[#F7F9FC] p-6 sm:p-7 rounded-[32px] border-l-8 border-[#2B67E6] shadow-sm flex flex-col gap-3">
-          <p className="text-xs sm:text-sm text-[#2B67E6] font-black uppercase tracking-widest flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-[#2B67E6]" strokeWidth={2.75} />
-            <span>HƯỚNG DẪN CÁCH DÙNG</span>
+      {/* 3. HOW TO USE / HƯỚNG DẪN CÁCH DÙNG / LỜI KHUYÊN (ONLY SHOWN ON SUCCESS AND NOT EXPIRED) */}
+      {isSuccess && !isExpired && (
+        <div className={`p-6 sm:p-7 rounded-[32px] border-l-8 shadow-sm flex flex-col gap-3 ${
+          isMedicine ? 'bg-[#F7F9FC] border-[#2B67E6]' : 'bg-[#FFF9F5] border-[#E65F2B]'
+        }`}>
+          <p className={`text-xs sm:text-sm font-black uppercase tracking-widest flex items-center gap-2 ${
+            isMedicine ? 'text-[#2B67E6]' : 'text-[#E65F2B]'
+          }`}>
+            <BookOpen className="w-5 h-5" strokeWidth={2.75} />
+            <span>{isMedicine ? 'HƯỚNG DẪN DÙNG THUỐC' : 'MẸO SỬ DỤNG & LƯU Ý'}</span>
           </p>
 
           <div className="bg-white text-[#1A1A1A] border-2 border-gray-200/80 p-5 sm:p-6 rounded-[24px] shadow-xs">
             <p className="text-xl sm:text-2xl font-black leading-snug tracking-tight text-[#1A1A1A]">
-              {usageInstructionsText}
+              {cleanedUsageInstructions}
             </p>
           </div>
         </div>
@@ -496,7 +640,15 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
           className="w-full min-h-[76px] bg-[#E65F2B] text-white font-black text-2xl px-6 py-4 rounded-[28px] flex items-center justify-center gap-3 hover:bg-[#d85320] active:scale-95 transition-all shadow-lg shadow-orange-500/20 uppercase tracking-tight cursor-pointer"
         >
           <Camera className="w-8 h-8 text-white" strokeWidth={2.75} />
-          <span>{isSuccess ? 'CHỤP HOẶC TRA CỨU ĐỒ KHÁC' : 'CHỤP LẠI ẢNH RÕ HƠN'}</span>
+          <span>
+            {isNeedSecondSide
+              ? '📸 LẬT HỘP & CHỤP MẶT SAU'
+              : isIndividualPack
+              ? '📸 CHỤP VỎ HỘP LỚN / ĐỒ KHÁC'
+              : isSuccess
+              ? 'CHỤP HOẶC TRA CỨU ĐỒ KHÁC'
+              : 'CHỤP LẠI ẢNH RÕ HƠN'}
+          </span>
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
-export type ItemCategory = 'MEDICINE' | 'HOUSEHOLD_GOOD';
-export type ExpiryStatus = 'VALID' | 'EXPIRED' | 'UNCLEAR';
+export type ItemCategory = 'MEDICINE' | 'HOUSEHOLD_GOOD' | 'CONSUMER_GOODS' | 'PERSONAL_ITEM';
+export type ItemType = 'MEDICINE' | 'CONSUMER_GOODS' | 'PERSONAL_ITEM' | 'UNKNOWN' | 'medicine' | 'food_or_consumer' | 'unknown';
+export type ExpiryStatus = 'VALID' | 'EXPIRED' | 'UNCLEAR' | 'NOT_APPLICABLE';
 
 export interface ExpirationInfo {
   status: ExpiryStatus;
@@ -9,10 +10,18 @@ export interface ExpirationInfo {
   location_found?: string;
 }
 
+export interface MultiSideSession {
+  step: number;
+  item_name: string;
+  timestamp: number;
+  first_side_data?: MedicineAnalysisResult;
+  first_side_image?: string;
+}
+
 export interface MedicineAnalysisResult {
   // Standardized AI schema fields
-  status?: 'success' | 'unclear' | 'not_found';
-  item_type?: 'medicine' | 'food_or_consumer' | 'unknown';
+  status?: 'success' | 'unclear' | 'not_found' | 'need_second_side' | 'individual_pack' | 'cross_product_mismatch';
+  item_type?: ItemType;
   item_name?: string;
   expiry_date?: string;
   is_expired?: boolean;
@@ -20,6 +29,7 @@ export interface MedicineAnalysisResult {
   usage_instructions?: string;
   safety_alert?: string;
   speech_text?: string;
+  is_cross_mismatch?: boolean;
 
   // App UI & backward compatibility fields
   item_category: ItemCategory;

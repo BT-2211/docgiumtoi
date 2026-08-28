@@ -15,11 +15,17 @@ import {
   Calendar,
   Clock,
   Scan,
-  Tag
+  Tag,
+  RotateCcw,
+  Timer
 } from 'lucide-react';
 import { SAMPLE_MEDICINES, SampleMedicine } from '../data/sampleMedicines';
-import { MedicineAnalysisResult, SeniorSettings } from '../types';
+import { MedicineAnalysisResult, MultiSideSession, SeniorSettings } from '../types';
 import { speechService } from '../services/speechService';
+import { compressImage } from '../utils/imageCompressor';
+
+const MULTI_SIDE_STORAGE_KEY = 'docgiumtoi_multi_side_session';
+const MULTI_SIDE_TIMEOUT_SECONDS = 45;
 
 interface CameraScannerProps {
   settings: SeniorSettings;
@@ -44,12 +50,64 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const [textQuery, setTextQuery] = useState<string>('');
   const [showTextInput, setShowTextInput] = useState<boolean>(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-
   const [cameraPermissionDenied, setCameraPermissionDenied] = useState<boolean>(false);
+
+  // Multi-side session state
+  const [multiSideSession, setMultiSideSession] = useState<MultiSideSession | null>(null);
+  const [countdownSeconds, setCountdownSeconds] = useState<number>(MULTI_SIDE_TIMEOUT_SECONDS);
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Initialize and check multi-side session on mount and reload
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(MULTI_SIDE_STORAGE_KEY);
+      if (raw) {
+        const parsed: MultiSideSession = JSON.parse(raw);
+        const elapsed = (Date.now() - parsed.timestamp) / 1000;
+        if (elapsed < MULTI_SIDE_TIMEOUT_SECONDS) {
+          setMultiSideSession(parsed);
+          setCountdownSeconds(Math.max(1, Math.round(MULTI_SIDE_TIMEOUT_SECONDS - elapsed)));
+        } else {
+          sessionStorage.removeItem(MULTI_SIDE_STORAGE_KEY);
+          setMultiSideSession(null);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse multi-side session from sessionStorage:', e);
+    }
+  }, []);
+
+  // 45-second timer countdown for multi-side capture
+  useEffect(() => {
+    if (!multiSideSession) return;
+
+    const timer = setInterval(() => {
+      setCountdownSeconds((prev) => {
+        if (prev <= 1) {
+          // 45 seconds expired! Clean up sessionStorage and reset
+          clearInterval(timer);
+          sessionStorage.removeItem(MULTI_SIDE_STORAGE_KEY);
+          setMultiSideSession(null);
+          setSessionExpiredNotice('Đã quá 45 giây chờ chụp mặt sau. Trợ lý đã đặt lại về chế độ chụp ban đầu ạ.');
+          setTimeout(() => setSessionExpiredNotice(null), 6000);
+          return MULTI_SIDE_TIMEOUT_SECONDS;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [multiSideSession]);
+
+  const handleCancelMultiSide = () => {
+    sessionStorage.removeItem(MULTI_SIDE_STORAGE_KEY);
+    setMultiSideSession(null);
+    setCountdownSeconds(MULTI_SIDE_TIMEOUT_SECONDS);
+  };
 
   // Initialize camera stream
   const startCamera = async () => {
@@ -101,7 +159,6 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   };
 
   useEffect(() => {
-    // Attempt camera startup if permissions allow, otherwise user can click
     startCamera();
     return () => {
       stopCamera();
@@ -127,10 +184,13 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
   const processImagePayload = async (imageBase64: string, customQuery?: string) => {
     setIsLoading(true);
-    setLoadingStep('Đang gửi hình ảnh nhãn bao bì đến trợ lý AI...');
+    setLoadingStep(
+      multiSideSession
+        ? `Đang đối chiếu mặt sau với "${multiSideSession.item_name}" và tìm HSD...`
+        : 'Đang gửi hình ảnh nhãn bao bì đến trợ lý AI...'
+    );
     if (settings.soundFeedback) speechService.playFeedbackSound('beep');
 
-    // Dynamic reassurance steps while AI processes
     const step1 = setTimeout(() => {
       setLoadingStep('Đang quét đọc chữ và tìm kiếm hạn sử dụng...');
     }, 1800);
@@ -140,15 +200,20 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     }, 3800);
 
     try {
+      // Send step and previousItemName for cross-product validation & model routing
+      const payload: any = {
+        imageBase64: imageBase64,
+        mimeType: 'image/jpeg',
+        textQuery: customQuery || textQuery,
+        scanMode: multiSideSession ? 'EXPIRATION_FOCUS' : scanMode,
+        step: multiSideSession ? 2 : 1,
+        previousItemName: multiSideSession ? multiSideSession.item_name : undefined,
+      };
+
       const response = await fetch('/api/analyze-medicine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: imageBase64,
-          mimeType: 'image/jpeg',
-          textQuery: customQuery || textQuery,
-          scanMode: scanMode,
-        }),
+        body: JSON.stringify(payload),
       });
 
       clearTimeout(step1);
@@ -161,31 +226,55 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         json = JSON.parse(rawText);
       } catch (parseErr) {
         console.warn('Failed to parse response JSON:', parseErr);
-        throw new Error('Máy chủ đang bận xử lý. Bác vui lòng đợi vài giây rồi bấm chụp lại nhé.');
+        throw new Error('Máy chủ đang bận xử lý. Bác vui lòng đợi vài giây rồi bấm chụp lại ạ.');
       }
 
       if (!response.ok || !json || !json.success || !json.data) {
-        throw new Error(json?.error || 'Không thể nhận diện được vỏ thuốc. Bác vui lòng thử chụp lại rõ nét hơn nhé.');
+        throw new Error(json?.error || 'Không thể nhận diện được vỏ sản phẩm. Bác vui lòng thử chụp lại rõ nét hơn ạ.');
+      }
+
+      const result: MedicineAnalysisResult = json.data;
+
+      // Handle multi-side session persistence
+      if (result.status === 'need_second_side') {
+        const newSession: MultiSideSession = {
+          step: 2,
+          item_name: result.item_name || result.product_name || 'Sản phẩm',
+          timestamp: Date.now(),
+          first_side_data: result,
+          first_side_image: imageBase64,
+        };
+        try {
+          sessionStorage.setItem(MULTI_SIDE_STORAGE_KEY, JSON.stringify(newSession));
+          setMultiSideSession(newSession);
+          setCountdownSeconds(MULTI_SIDE_TIMEOUT_SECONDS);
+        } catch (e) {
+          console.warn('Failed to save to sessionStorage:', e);
+        }
+      } else {
+        // If capture was completed (success, individual_pack, cross_product_mismatch, etc.)
+        sessionStorage.removeItem(MULTI_SIDE_STORAGE_KEY);
+        setMultiSideSession(null);
       }
 
       if (settings.soundFeedback) speechService.playFeedbackSound('success');
       stopCamera();
-      onAnalysisSuccess(json.data, imageBase64);
+      onAnalysisSuccess(result, imageBase64);
     } catch (err: any) {
       clearTimeout(step1);
       clearTimeout(step2);
       console.error('Analysis error:', err);
       if (settings.soundFeedback) speechService.playFeedbackSound('alert');
-      
-      let message = err?.message || 'Lỗi khi đọc thuốc. Xin Bác chụp lại nơi đủ ánh sáng nhé.';
+
+      let message = err?.message || 'Lỗi khi đọc sản phẩm. Xin Bác chụp lại nơi đủ ánh sáng ạ.';
       if (message.includes('high demand') || message.includes('503') || message.includes('UNAVAILABLE')) {
-        message = 'Máy chủ đang có nhiều người cùng tra cứu. Bác vui lòng đợi vài giây rồi bấm "Thử Lại" nhé.';
+        message = 'Máy chủ đang có nhiều người cùng tra cứu. Bác vui lòng đợi vài giây rồi bấm "Thử Lại" ạ.';
       } else if (message.startsWith('{') && message.includes('error')) {
         try {
           const parsed = JSON.parse(message);
           if (parsed?.error?.message) {
-            message = parsed.error.message.includes('high demand') 
-              ? 'Máy chủ đang có nhiều người cùng tra cứu. Bác vui lòng đợi vài giây rồi bấm "Thử Lại" nhé.'
+            message = parsed.error.message.includes('high demand')
+              ? 'Máy chủ đang có nhiều người cùng tra cứu. Bác vui lòng đợi vài giây rồi bấm "Thử Lại" ạ.'
               : parsed.error.message;
           }
         } catch {
@@ -198,51 +287,64 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     }
   };
 
-  // Capture current camera frame
-  const capturePhoto = () => {
+  // Capture current camera frame with Canvas compression (max 1024px, JPEG 0.8)
+  const capturePhoto = async () => {
     if (settings.soundFeedback) speechService.playFeedbackSound('camera');
 
     if (!videoRef.current || !cameraActive) {
-      // If camera stream is not live, trigger file upload dialog
       if (fileInputRef.current) {
         fileInputRef.current.click();
       }
       return;
     }
 
-    const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    setCapturedImage(dataUrl);
-
-    processImagePayload(dataUrl);
+    try {
+      const compressedDataUrl = await compressImage(videoRef.current, 1024, 0.8);
+      setCapturedImage(compressedDataUrl);
+      processImagePayload(compressedDataUrl);
+    } catch (err) {
+      console.warn('Capture/compression fallback:', err);
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.min(1024, video.videoWidth || 640);
+      canvas.height = Math.min(1024, video.videoHeight || 480);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setCapturedImage(dataUrl);
+        processImagePayload(dataUrl);
+      }
+    }
   };
 
-  // Handle uploaded file from device
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle uploaded file from device with compression
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setCapturedImage(base64);
-      processImagePayload(base64);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file, 1024, 0.8);
+      setCapturedImage(compressed);
+      processImagePayload(compressed);
+    } catch (err) {
+      console.warn('File upload compression failed, falling back to raw reader:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        setCapturedImage(base64);
+        processImagePayload(base64);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Select a preset sample medicine for instant demo
   const handleSelectSample = (sample: SampleMedicine) => {
     if (settings.soundFeedback) speechService.playFeedbackSound('success');
     stopCamera();
+    sessionStorage.removeItem(MULTI_SIDE_STORAGE_KEY);
+    setMultiSideSession(null);
     onAnalysisSuccess(sample.result);
   };
 
@@ -264,15 +366,17 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       .then((res) => res.json())
       .then((json) => {
         if (!json.success || !json.data) {
-          throw new Error(json.error || 'Không tìm thấy thuốc.');
+          throw new Error(json.error || 'Không tìm thấy sản phẩm.');
         }
         if (settings.soundFeedback) speechService.playFeedbackSound('success');
         stopCamera();
+        sessionStorage.removeItem(MULTI_SIDE_STORAGE_KEY);
+        setMultiSideSession(null);
         onAnalysisSuccess(json.data);
       })
       .catch((err) => {
         if (settings.soundFeedback) speechService.playFeedbackSound('alert');
-        onError(err.message || 'Lỗi khi tra cứu thuốc.');
+        onError(err.message || 'Lỗi khi tra cứu sản phẩm.');
       })
       .finally(() => {
         setIsLoading(false);
@@ -281,23 +385,71 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-3.5 pb-28 pt-1 px-3 sm:px-4">
-      {/* 1. TOP CONCISE INSTRUCTION CARD */}
-      <div
-        id="card-top-instruction"
-        className="bg-white border-2 border-[#E65F2B]/20 rounded-[28px] sm:rounded-[32px] p-4 sm:p-5 flex flex-col items-center justify-center gap-2 text-center shadow-sm transition-all"
-      >
-        <div className="w-10 h-10 rounded-full bg-[#E65F2B]/10 text-[#E65F2B] flex items-center justify-center">
-          <Info className="w-6 h-6" strokeWidth={2.75} />
+      {/* MULTI-SIDE CAPTURE STATE BANNER (WITH 45S COUNTDOWN TIMER) */}
+      {multiSideSession && (
+        <div
+          id="banner-multi-side-mode"
+          className="bg-blue-600 text-white rounded-[28px] p-4 sm:p-5 flex flex-col gap-3 shadow-lg border-2 border-blue-400 animate-fadeIn"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <RotateCcw className="w-7 h-7 text-yellow-300 animate-spin" style={{ animationDuration: '8s' }} strokeWidth={2.75} />
+              <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
+                ĐANG CHỤP MẶT 2: TÌM HẠN SỬ DỤNG
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-yellow-400 text-blue-950 px-3 py-1 rounded-full font-black text-sm uppercase tracking-wider shadow-sm">
+              <Timer className="w-4 h-4" />
+              <span>{countdownSeconds}s</span>
+            </div>
+          </div>
+
+          <p className="text-base sm:text-lg font-bold leading-snug text-blue-50">
+            Bác đang chụp mặt sau hoặc mặt đáy của: <span className="text-yellow-300 underline font-black">{multiSideSession.item_name}</span>
+          </p>
+
+          <div className="flex items-center justify-between pt-1 border-t border-blue-400/50 text-xs sm:text-sm font-semibold">
+            <span className="text-blue-100">
+              Tự động trở về màn hình chính sau {countdownSeconds} giây nếu không chụp.
+            </span>
+            <button
+              onClick={handleCancelMultiSide}
+              className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded-full font-bold transition-all cursor-pointer"
+            >
+              Hủy / Đổi món khác
+            </button>
+          </div>
         </div>
-        <p className="text-xl sm:text-2xl font-black text-[#1A1A1A] leading-tight tracking-tight">
-          Chụp hình để đọc thông tin & hạn sử dụng
-        </p>
-      </div>
+      )}
+
+      {/* SESSION EXPIRED TOAST NOTICE */}
+      {sessionExpiredNotice && (
+        <div className="bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-[20px] p-3.5 text-base font-bold text-center shadow-sm">
+          {sessionExpiredNotice}
+        </div>
+      )}
+
+      {/* 1. TOP CONCISE INSTRUCTION CARD (Standard mode) */}
+      {!multiSideSession && (
+        <div
+          id="card-top-instruction"
+          className="bg-white border-2 border-[#E65F2B]/20 rounded-[28px] sm:rounded-[32px] p-4 sm:p-5 flex flex-col items-center justify-center gap-2 text-center shadow-sm transition-all"
+        >
+          <div className="w-10 h-10 rounded-full bg-[#E65F2B]/10 text-[#E65F2B] flex items-center justify-center">
+            <Info className="w-6 h-6" strokeWidth={2.75} />
+          </div>
+          <p className="text-xl sm:text-2xl font-black text-[#1A1A1A] leading-tight tracking-tight">
+            Chụp hình để đọc thông tin & hạn sử dụng
+          </p>
+        </div>
+      )}
 
       {/* 2. CAMERA VIEWFINDER (OPTIMIZED LIVE PREVIEW) */}
       <div
         id="camera-viewfinder-container"
-        className="relative w-full h-[70vh] sm:h-[75vh] md:h-[80vh] bg-[#111827] border-4 border-[#E65F2B] rounded-[32px] overflow-hidden shadow-2xl flex flex-col items-center justify-center transition-all"
+        className={`relative w-full h-[70vh] sm:h-[75vh] md:h-[80vh] bg-[#111827] border-4 ${
+          multiSideSession ? 'border-blue-500' : 'border-[#E65F2B]'
+        } rounded-[32px] overflow-hidden shadow-2xl flex flex-col items-center justify-center transition-all`}
       >
         {/* Live Video */}
         <video
@@ -308,16 +460,29 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
         />
 
-        {/* Minimalist Top Notification Pill Badge (Clean & Fixed near top edge of camera) */}
+        {/* Minimalist Top Notification Pill Badge */}
         <div className="absolute top-4 inset-x-0 flex justify-center pointer-events-none z-20 px-4">
           <div
             id="pill-instruction-badge"
-            className="bg-[#1A1A1A]/85 text-white backdrop-blur-md px-5 py-2.5 rounded-full border-2 border-white/30 shadow-xl flex items-center gap-2"
+            className={`${
+              multiSideSession ? 'bg-blue-900/90 border-blue-400' : 'bg-[#1A1A1A]/85 border-white/30'
+            } text-white backdrop-blur-md px-5 py-2.5 rounded-full border-2 shadow-xl flex items-center gap-2`}
           >
-            <Camera className="w-5 h-5 text-[#E65F2B] shrink-0" strokeWidth={2.75} />
-            <span className="text-sm sm:text-base font-black tracking-wide uppercase text-white">
-              📸 ĐẶT VẬT DỤNG VÀO KHUNG HÌNH
-            </span>
+            {multiSideSession ? (
+              <>
+                <RotateCcw className="w-5 h-5 text-yellow-400 shrink-0" strokeWidth={2.75} />
+                <span className="text-sm sm:text-base font-black tracking-wide uppercase text-white">
+                  📸 LẬT MẶT SAU / MẶT ĐÁY ĐỂ SOI HSD
+                </span>
+              </>
+            ) : (
+              <>
+                <Camera className="w-5 h-5 text-[#E65F2B] shrink-0" strokeWidth={2.75} />
+                <span className="text-sm sm:text-base font-black tracking-wide uppercase text-white">
+                  📸 ĐẶT VẬT DỤNG VÀO KHUNG HÌNH
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -345,13 +510,13 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         {cameraActive && (
           <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-between p-6 sm:p-8 z-10">
             <div className="w-full flex justify-between">
-              <div className="w-12 h-12 border-t-4 border-l-4 border-[#E65F2B] rounded-tl-2xl" />
-              <div className="w-12 h-12 border-t-4 border-r-4 border-[#E65F2B] rounded-tr-2xl" />
+              <div className={`w-12 h-12 border-t-4 border-l-4 ${multiSideSession ? 'border-blue-400' : 'border-[#E65F2B]'} rounded-tl-2xl`} />
+              <div className={`w-12 h-12 border-t-4 border-r-4 ${multiSideSession ? 'border-blue-400' : 'border-[#E65F2B]'} rounded-tr-2xl`} />
             </div>
 
             <div className="w-full flex justify-between">
-              <div className="w-12 h-12 border-b-4 border-l-4 border-[#E65F2B] rounded-bl-2xl" />
-              <div className="w-12 h-12 border-b-4 border-r-4 border-[#E65F2B] rounded-br-2xl" />
+              <div className={`w-12 h-12 border-b-4 border-l-4 ${multiSideSession ? 'border-blue-400' : 'border-[#E65F2B]'} rounded-bl-2xl`} />
+              <div className={`w-12 h-12 border-b-4 border-r-4 ${multiSideSession ? 'border-blue-400' : 'border-[#E65F2B]'} rounded-br-2xl`} />
             </div>
           </div>
         )}
@@ -384,13 +549,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         {/* Loading Overlay */}
         {isLoading && (
           <div className="absolute inset-0 bg-white/95 z-30 flex flex-col items-center justify-center p-6 text-center gap-6 backdrop-blur-md">
-            {/* Perfectly circular dual-layer spinner */}
             <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 flex items-center justify-center">
-              {/* Outer soft track ring */}
               <div className="w-full h-full rounded-full border-[6px] border-orange-100 shrink-0" />
-              {/* Spinning active orange arc */}
               <div className="absolute inset-0 w-full h-full rounded-full border-[6px] border-transparent border-t-[#E65F2B] border-r-[#E65F2B] animate-spin shrink-0" />
-              {/* Inner glowing icon */}
               <div className="absolute inset-0 flex items-center justify-center text-[#E65F2B]">
                 <Camera className="w-9 h-9 animate-pulse text-[#E65F2B]" strokeWidth={2.5} />
               </div>
@@ -398,13 +559,13 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
             <div className="max-w-md">
               <h3 className="text-2xl sm:text-3xl font-black uppercase text-[#E65F2B] mb-2 tracking-tight">
-                ĐANG ĐỌC NHÃN BAO BÌ & HSD
+                {multiSideSession ? 'ĐANG QUÉT MẶT SAU & HSD' : 'ĐANG ĐỌC NHÃN BAO BÌ & HSD'}
               </h3>
               <p className="text-xl sm:text-2xl font-bold text-[#1A1A1A] leading-relaxed">
                 {loadingStep}
               </p>
               <p className="text-base text-gray-500 mt-3 font-medium italic">
-                Bác chờ cháu một chút xíu nhé, cháu đang tìm hạn sử dụng và kiểm tra cho Bác...
+                Bác chờ cháu một chút ạ, cháu đang tìm hạn sử dụng và kiểm tra cho Bác...
               </p>
             </div>
           </div>
@@ -416,22 +577,29 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         id="btn-capture-medicine"
         onClick={capturePhoto}
         disabled={isLoading}
-        className="w-full min-h-[130px] sm:min-h-[150px] bg-[#E65F2B] hover:bg-[#d85320] text-white rounded-[32px] flex flex-col justify-center items-center gap-2 active:scale-[0.98] transition-all shadow-xl shadow-orange-500/25 focus:outline-none focus:ring-4 focus:ring-orange-300 disabled:opacity-50 cursor-pointer"
+        className={`w-full min-h-[130px] sm:min-h-[150px] ${
+          multiSideSession ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30' : 'bg-[#E65F2B] hover:bg-[#d85320] shadow-orange-500/25'
+        } text-white rounded-[32px] flex flex-col justify-center items-center gap-2 active:scale-[0.98] transition-all shadow-xl focus:outline-none focus:ring-4 focus:ring-orange-300 disabled:opacity-50 cursor-pointer`}
       >
         <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/20 rounded-full flex items-center justify-center">
-          <Camera className="w-9 h-9 sm:w-10 sm:h-10 text-white" strokeWidth={2.75} />
+          {multiSideSession ? (
+            <RotateCcw className="w-9 h-9 sm:w-10 sm:h-10 text-white" strokeWidth={2.75} />
+          ) : (
+            <Camera className="w-9 h-9 sm:w-10 sm:h-10 text-white" strokeWidth={2.75} />
+          )}
         </div>
         <span className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-center px-4 leading-none text-white">
-          CHỤP HÌNH NHÃN SẢN PHẨM
+          {multiSideSession ? 'CHỤP MẶT SAU / MẶT ĐÁY' : 'CHỤP HÌNH NHÃN SẢN PHẨM'}
         </span>
         <span className="text-xs sm:text-sm font-bold text-white/90 uppercase tracking-wider">
-          (Bấm vào đây để AI đọc tên & Hạn Sử Dụng ngay)
+          {multiSideSession
+            ? `(Đối chiếu với ${multiSideSession.item_name} & Đọc HSD)`
+            : '(Bấm vào đây để AI đọc tên & Hạn Sử Dụng ngay)'}
         </span>
       </button>
 
       {/* 3. SECONDARY ACTIONS: UPLOAD PHOTO & TYPE MEDICINE */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Hidden file input */}
         <input
           ref={fileInputRef}
           type="file"
@@ -440,7 +608,6 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           onChange={handleFileUpload}
         />
 
-        {/* Upload file button */}
         <button
           id="btn-upload-photo"
           onClick={() => fileInputRef.current?.click()}
@@ -451,7 +618,6 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           <span className="uppercase tracking-wider">TẢI ẢNH TỪ MÁY</span>
         </button>
 
-        {/* Search by text button */}
         <button
           id="btn-toggle-text-search"
           onClick={() => setShowTextInput(!showTextInput)}
@@ -516,14 +682,26 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
                   </span>
                   <span
                     className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      sample.result.expiration_info?.status === 'EXPIRED'
+                      sample.result.status === 'need_second_side'
+                        ? 'bg-blue-100 text-blue-800'
+                        : sample.result.status === 'individual_pack'
+                        ? 'bg-amber-100 text-amber-800'
+                        : sample.result.status === 'cross_product_mismatch'
+                        ? 'bg-red-100 text-red-800'
+                        : sample.result.expiration_info?.status === 'EXPIRED'
                         ? 'bg-red-100 text-red-700'
                         : sample.result.expiration_info?.status === 'VALID'
                         ? 'bg-green-100 text-green-700'
                         : 'bg-amber-100 text-amber-700'
                     }`}
                   >
-                    {sample.result.expiration_info?.status === 'EXPIRED'
+                    {sample.result.status === 'need_second_side'
+                      ? 'Lật mặt sau'
+                      : sample.result.status === 'individual_pack'
+                      ? 'Gói lẻ'
+                      : sample.result.status === 'cross_product_mismatch'
+                      ? 'Khác mặt 1'
+                      : sample.result.expiration_info?.status === 'EXPIRED'
                       ? 'Hết hạn'
                       : sample.result.expiration_info?.status === 'VALID'
                       ? 'Còn hạn'

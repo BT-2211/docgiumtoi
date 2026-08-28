@@ -57,7 +57,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({ settings, onUpdateSettings
             ĐọcGiùmTôi
           </h1>
           <p className="text-xs sm:text-sm text-white/90 font-bold mt-0.5 tracking-wide line-clamp-1">
-            Trợ lý đọc vỏ thuốc cho Bác
+            Trợ lý đọc chữ & đồ dùng cho Bác
           </p>
         </div>
       </div>

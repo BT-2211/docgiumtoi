@@ -18,7 +18,7 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
     color: 'from-blue-600 to-indigo-700',
     result: {
       status: 'success',
-      item_type: 'medicine',
+      item_type: 'MEDICINE',
       item_name: 'Thuốc Amlodipine 5mg (Huyết áp)',
       item_category: 'MEDICINE',
       product_name: 'Thuốc Amlodipine 5mg (Huyết áp)',
@@ -40,6 +40,169 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
     }
   },
   {
+    id: 'wallet-item',
+    name: 'Ví Tiền Da Bỏ Túi',
+    category: 'Đồ Dùng Cá Nhân',
+    typeBadge: '👛 Đồ Cá Nhân',
+    color: 'from-amber-700 to-yellow-800',
+    result: {
+      status: 'success',
+      item_type: 'PERSONAL_ITEM',
+      item_name: 'Ví Tiền Da Bỏ Túi',
+      item_category: 'PERSONAL_ITEM',
+      product_name: 'Ví Tiền Da Bỏ Túi',
+      usage_summary: 'Đồ dùng cá nhân để cất giữ tiền mặt và giấy tờ tùy thân',
+      primary_purpose: 'Đồ dùng cá nhân để cất giữ tiền mặt và giấy tờ tùy thân',
+      primary_function: 'Đồ dùng cá nhân để cất giữ tiền mặt và giấy tờ tùy thân',
+      expiration_info: {
+        status: 'NOT_APPLICABLE',
+        expiry_date_text: 'Không áp dụng hạn dùng',
+        days_remaining_text: 'Đồ dùng cá nhân',
+      },
+      usage_instructions: 'Bác nhớ cất ví vào túi áo hoặc kệ quen thuộc kẻo quên ạ!',
+      usage_instruction: 'Bác nhớ cất ví vào túi áo hoặc kệ quen thuộc kẻo quên ạ!',
+      how_to_use: 'Bác nhớ cất ví vào túi áo hoặc kệ quen thuộc kẻo quên ạ!',
+      safety_alert: '',
+      speech_script: 'Dạ thưa Bác! Đây là chiếc ví tiền da của Bác để đựng tiền và giấy tờ. Bác nhớ cất ví cẩn thận vào túi áo hoặc ngăn tủ quen thuộc kẻo quên ạ.'
+    }
+  },
+  {
+    id: 'key-item',
+    name: 'Chùm Chìa Khóa Nhà',
+    category: 'Đồ Dùng Cá Nhân',
+    typeBadge: '🔑 Chìa Khóa',
+    color: 'from-slate-700 to-zinc-900',
+    result: {
+      status: 'success',
+      item_type: 'PERSONAL_ITEM',
+      item_name: 'Chùm Chìa Khóa Cửa Nhà',
+      item_category: 'PERSONAL_ITEM',
+      product_name: 'Chùm Chìa Khóa Cửa Nhà',
+      usage_summary: 'Chìa khóa mở cửa nhà và các phòng',
+      primary_purpose: 'Chìa khóa mở cửa nhà và các phòng',
+      primary_function: 'Chìa khóa mở cửa nhà và các phòng',
+      expiration_info: {
+        status: 'NOT_APPLICABLE',
+        expiry_date_text: 'Không áp dụng hạn dùng',
+        days_remaining_text: 'Đồ dùng cá nhân',
+      },
+      usage_instructions: 'Chìa khóa của Bác, Bác nhớ móc vào chỗ quen để khi cần dễ tìm ạ!',
+      usage_instruction: 'Chìa khóa của Bác, Bác nhớ móc vào chỗ quen để khi cần dễ tìm ạ!',
+      how_to_use: 'Chìa khóa của Bác, Bác nhớ móc vào chỗ quen để khi cần dễ tìm ạ!',
+      safety_alert: '',
+      speech_script: 'Dạ thưa Bác! Đây là chùm chìa khóa nhà của Bác. Bác nhớ treo chìa khóa vào móc cố định gần cửa ra vào để khi cần dễ tìm ạ.'
+    }
+  },
+  {
+    id: 'eugica-box-front',
+    name: 'Hộp Thuốc Eugica (Mặt Trước)',
+    category: 'Mặt Trước Hộp - Thiếu HSD',
+    typeBadge: '🔄 Cần Lật Mặt',
+    color: 'from-blue-600 to-cyan-700',
+    result: {
+      status: 'need_second_side',
+      item_type: 'MEDICINE',
+      item_name: 'Thuốc Ho Viên Nang Eugica',
+      item_category: 'MEDICINE',
+      product_name: 'Thuốc Ho Viên Nang Eugica',
+      usage_summary: 'Thuốc thảo dược hỗ trợ giảm ho, long đờm và đau rát họng',
+      primary_purpose: 'Thuốc thảo dược hỗ trợ giảm ho, long đờm và đau rát họng',
+      primary_function: 'Thuốc thảo dược hỗ trợ giảm ho, long đờm và đau rát họng',
+      expiration_info: {
+        status: 'UNCLEAR',
+        expiry_date_text: 'Cần lật mặt sau / mặt đáy',
+        days_remaining_text: 'Chưa thấy ngày HSD',
+      },
+      usage_instructions: 'Bác lật mặt sau hoặc mặt đáy của hộp rồi bấm chụp lại để xem hạn sử dụng ạ.',
+      usage_instruction: 'Bác lật mặt sau hoặc mặt đáy của hộp rồi bấm chụp lại để xem hạn sử dụng ạ.',
+      how_to_use: 'Bác lật mặt sau hoặc mặt đáy của hộp rồi bấm chụp lại để xem hạn sử dụng ạ.',
+      safety_alert: '',
+      speech_script: 'Cháu thấy Thuốc Ho Viên Nang Eugica rồi ạ! Nhưng mặt này chưa thấy hạn sử dụng. Bác lật mặt sau hoặc mặt đáy của hộp rồi bấm chụp lại giúp cháu ạ!'
+    }
+  },
+  {
+    id: 'chocopie-individual-pack',
+    name: 'Gói Bánh Choco-pie Bóc Lẻ',
+    category: 'Gói Bóc Lẻ Hộp Lớn',
+    typeBadge: '🍪 Bánh Lẻ',
+    color: 'from-amber-600 to-red-700',
+    result: {
+      status: 'individual_pack',
+      item_type: 'CONSUMER_GOODS',
+      item_name: 'Bánh Choco-pie Orion',
+      item_category: 'CONSUMER_GOODS',
+      product_name: 'Bánh Choco-pie Orion',
+      usage_summary: 'Bánh sô-cô-la kem dẻo marsh-mallow ăn nhẹ dinh dưỡng',
+      primary_purpose: 'Bánh sô-cô-la kem dẻo marsh-mallow ăn nhẹ dinh dưỡng',
+      primary_function: 'Bánh sô-cô-la kem dẻo marsh-mallow ăn nhẹ dinh dưỡng',
+      expiration_info: {
+        status: 'UNCLEAR',
+        expiry_date_text: 'Gói bóc lẻ - Không ghi HSD',
+        days_remaining_text: 'Cần xem vỏ hộp lớn',
+      },
+      usage_instructions: 'Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ.',
+      usage_instruction: 'Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ.',
+      how_to_use: 'Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ.',
+      safety_alert: 'LƯU Ý: Đây là gói lẻ không ghi hạn sử dụng trên vỏ.',
+      speech_script: 'Dạ đây là gói lẻ nên không ghi hạn sử dụng trên vỏ ạ. Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ.'
+    }
+  },
+  {
+    id: 'medicine-individual-strip',
+    name: 'Vỉ Thuốc Xé Lẻ (Không HSD)',
+    category: 'Vỉ Thuốc Xé Lẻ',
+    typeBadge: '💊 Vỉ Thuốc Lẻ',
+    color: 'from-red-600 to-rose-800',
+    result: {
+      status: 'individual_pack',
+      item_type: 'MEDICINE',
+      item_name: 'Vỉ Thuốc Panadol Xé Lẻ',
+      item_category: 'MEDICINE',
+      product_name: 'Vỉ Thuốc Panadol Xé Lẻ',
+      usage_summary: 'Thuốc giảm đau hạ sốt cắt lẻ không có thông tin hạn dùng',
+      primary_purpose: 'Thuốc giảm đau hạ sốt cắt lẻ không có thông tin hạn dùng',
+      primary_function: 'Thuốc giảm đau hạ sốt cắt lẻ không có thông tin hạn dùng',
+      expiration_info: {
+        status: 'UNCLEAR',
+        expiry_date_text: 'Vỉ thuốc xé lẻ - Không có HSD',
+        days_remaining_text: 'Cảnh báo an toàn thuốc',
+      },
+      usage_instructions: 'Nếu Bác không nhớ rõ ngày mua, Bác tuyệt đối không nên uống liều thuốc này để đảm bảo an toàn ạ.',
+      usage_instruction: 'Nếu Bác không nhớ rõ ngày mua, Bác tuyệt đối không nên uống liều thuốc này để đảm bảo an toàn ạ.',
+      how_to_use: 'Nếu Bác không nhớ rõ ngày mua, Bác tuyệt đối không nên uống liều thuốc này để đảm bảo an toàn ạ.',
+      safety_alert: 'CẢNH BÁO ĐỎ: Vỉ thuốc xé lẻ không có thông tin hạn sử dụng. Tuyệt đối không nên uống nếu không nhớ ngày mua!',
+      speech_script: 'Bác ơi, đây là vỉ thuốc xé lẻ không có thông tin hạn sử dụng. Để đảm bảo an toàn tuyệt đối cho sức khỏe, nếu Bác không nhớ rõ ngày mua, Bác tuyệt đối KHÔNG NÊN UỐNG liều thuốc này ạ!'
+    }
+  },
+  {
+    id: 'cross-mismatch-sample',
+    name: 'Chụp Nhầm Sang Hộp Khác (Mặt 2)',
+    category: 'Cảnh Báo Chụp Nhầm',
+    typeBadge: '⚠️ Chụp Nhầm',
+    color: 'from-red-700 to-orange-800',
+    result: {
+      status: 'cross_product_mismatch',
+      item_type: 'CONSUMER_GOODS',
+      item_name: 'Sản phẩm khác với mặt trước',
+      item_category: 'CONSUMER_GOODS',
+      product_name: 'Sản phẩm khác với mặt trước',
+      is_cross_mismatch: true,
+      usage_summary: 'Hình chụp không khớp với sản phẩm mặt trước lúc nãy',
+      primary_purpose: 'Hình chụp không khớp với sản phẩm mặt trước lúc nãy',
+      primary_function: 'Hình chụp không khớp với sản phẩm mặt trước lúc nãy',
+      expiration_info: {
+        status: 'UNCLEAR',
+        expiry_date_text: 'Chụp nhầm sản phẩm khác',
+        days_remaining_text: 'Vui lòng chụp lại đúng hộp',
+      },
+      usage_instructions: 'Bác vui lòng lấy đúng sản phẩm lúc nãy và chụp lại mặt sau ạ.',
+      usage_instruction: 'Bác vui lòng lấy đúng sản phẩm lúc nãy và chụp lại mặt sau ạ.',
+      how_to_use: 'Bác vui lòng lấy đúng sản phẩm lúc nãy và chụp lại mặt sau ạ.',
+      safety_alert: 'Hình như Bác đang chụp một sản phẩm khác với mặt trước lúc nãy.',
+      speech_script: 'Hình như Bác đang chụp một sản phẩm khác rồi ạ. Bác kiểm tra lại đúng hộp bánh lúc nãy để cháu đọc lại ạ!'
+    }
+  },
+  {
     id: 'sunsilk-shampoo',
     name: 'Dầu gội Sunsilk Óng Mượt',
     category: 'Chăm Sóc Cá Nhân',
@@ -47,7 +210,7 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
     color: 'from-pink-600 to-rose-700',
     result: {
       status: 'success',
-      item_type: 'food_or_consumer',
+      item_type: 'CONSUMER_GOODS',
       item_name: 'Dầu gội đầu Sunsilk Mềm Mượt Diệu Kỳ',
       item_category: 'HOUSEHOLD_GOOD',
       product_name: 'Dầu gội đầu Sunsilk Mềm Mượt Diệu Kỳ',
@@ -76,7 +239,8 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
     color: 'from-red-600 to-amber-700',
     result: {
       status: 'success',
-      item_type: 'food_or_consumer',
+      is_expired: true,
+      item_type: 'CONSUMER_GOODS',
       item_name: 'Hộp Sữa Tươi Tiệt Trùng TH True Milk',
       item_category: 'HOUSEHOLD_GOOD',
       product_name: 'Hộp Sữa Tươi Tiệt Trùng TH True Milk',
