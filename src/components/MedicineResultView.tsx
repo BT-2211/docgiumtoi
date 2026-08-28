@@ -40,7 +40,6 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
     isPaused: false,
   });
   const [showFullScript, setShowFullScript] = useState(false);
-  const [hasAutoRead, setHasAutoRead] = useState(false);
 
   // Helper to ensure Expiration Date (HSD) is always clearly included in speech audio
   const getFullSpeechText = () => {
@@ -61,18 +60,20 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
     return script;
   };
 
+  // Tự động phát giọng nói (Auto-play) ngay lập tức khi hiển thị màn hình kết quả
   useEffect(() => {
     const unsubscribe = speechService.subscribe((state) => {
       setSpeechState(state);
     });
 
-    // Auto read aloud if enabled in settings
+    const fullText = getFullSpeechText();
     let timer: any = null;
-    if (settings.autoReadSound && !hasAutoRead) {
-      setHasAutoRead(true);
+    if (fullText) {
+      // Dừng các âm thanh camera trước đó và tự động đọc ngay lập tức
+      speechService.stop();
       timer = setTimeout(() => {
-        speechService.speak(getFullSpeechText(), settings.speechRate);
-      }, 400);
+        speechService.speak(fullText, settings.speechRate || 0.85);
+      }, 150);
     }
 
     return () => {
@@ -80,22 +81,15 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
       speechService.stop();
       unsubscribe();
     };
-  }, [result, settings, hasAutoRead]);
+  }, [result]);
 
-  const handleToggleAudio = () => {
+  // 01 Nút điều khiển giọng nói chính: Đang đọc -> Dừng đọc; Đã dừng/Xong -> Nghe lại
+  const handleMainSpeechControl = () => {
     if (speechState.isSpeaking) {
-      if (speechState.isPaused) {
-        speechService.resume();
-      } else {
-        speechService.pause();
-      }
+      speechService.stop();
     } else {
-      speechService.speak(getFullSpeechText(), settings.speechRate);
+      speechService.speak(getFullSpeechText(), settings.speechRate || 0.85);
     }
-  };
-
-  const handleReplay = () => {
-    speechService.speak(getFullSpeechText(), settings.speechRate);
   };
 
   const handleSpeakOnlyHSD = (e: React.MouseEvent) => {
@@ -537,18 +531,16 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
       {/* 6. SPEECH AUDIO CONTROL CARD */}
       <div
         id="card-speech-control"
-        className="bg-[#E65F2B] text-white rounded-[32px] p-6 sm:p-8 flex flex-col gap-6 items-center shadow-xl shadow-orange-500/25"
+        className="bg-[#E65F2B] text-white rounded-[32px] p-6 sm:p-8 flex flex-col gap-5 items-center shadow-xl shadow-orange-500/25"
       >
         <div className="text-center">
-          <p className="text-sm uppercase font-black tracking-widest text-white/80 mb-1">
+          <p className="text-sm sm:text-base uppercase font-black tracking-widest text-white/80 mb-1">
             GIỌNG NÓI TRỢ LÝ
           </p>
           <h3 className="text-2xl sm:text-3xl font-black uppercase leading-tight">
             {speechState.isSpeaking
-              ? speechState.isPaused
-                ? 'ĐANG TẠM DỪNG ĐỌC'
-                : 'ĐANG ĐỌC HƯỚNG DẪN CHO BÁC...'
-              : 'NHẤN ĐỂ NGHE LẠI HƯỚNG DẪN'}
+              ? 'ĐANG ĐỌC CHO BÁC NGHE...'
+              : 'BẤM ĐỂ NGHE LẠI TỪ ĐẦU'}
           </h3>
         </div>
 
@@ -578,37 +570,24 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
           ))}
         </div>
 
-        {/* Giant Play/Pause/Replay Button */}
-        <div className="w-full flex flex-col sm:flex-row gap-3">
-          <button
-            id="btn-toggle-speech"
-            onClick={handleToggleAudio}
-            className="flex-1 min-h-[84px] bg-white text-[#E65F2B] font-black text-2xl sm:text-3xl px-6 py-4 rounded-[24px] flex items-center justify-center gap-4 hover:bg-white/95 active:scale-95 transition-all shadow-lg cursor-pointer"
-          >
-            {speechState.isSpeaking && !speechState.isPaused ? (
-              <>
-                <Pause className="w-9 h-9" strokeWidth={3} />
-                <span className="uppercase tracking-tight">TẠM DỪNG ĐỌC</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-9 h-9 fill-current" strokeWidth={3} />
-                <span className="uppercase tracking-tight">{speechState.isPaused ? 'TIẾP TỤC ĐỌC' : '🔊 ĐỌC CHO BÁC NGHE'}</span>
-              </>
-            )}
-          </button>
-
-          {/* Replay button */}
-          <button
-            id="btn-replay-speech"
-            onClick={handleReplay}
-            title="Đọc lại từ đầu"
-            className="sm:w-28 min-h-[64px] sm:min-h-[84px] bg-white/20 text-white font-black text-base sm:text-lg rounded-[24px] border border-white/30 flex flex-col items-center justify-center gap-1 hover:bg-white/30 active:scale-95 transition-all shadow-sm uppercase tracking-wider cursor-pointer"
-          >
-            <RotateCcw className="w-6 h-6 text-white" strokeWidth={2.75} />
-            <span className="text-xs">ĐỌC LẠI</span>
-          </button>
-        </div>
+        {/* 01 Nút điều khiển chính duy nhất (Dừng đọc / Nghe lại) */}
+        <button
+          id="btn-main-speech-control"
+          onClick={handleMainSpeechControl}
+          className="w-full min-h-[84px] sm:min-h-[92px] bg-white text-[#E65F2B] font-black text-2xl sm:text-3xl px-6 py-4 rounded-[26px] flex items-center justify-center gap-4 hover:bg-white/95 active:scale-95 transition-all shadow-lg ring-4 ring-white/30 uppercase tracking-tight cursor-pointer"
+        >
+          {speechState.isSpeaking ? (
+            <>
+              <Pause className="w-9 h-9 sm:w-10 sm:h-10 fill-current text-red-600" strokeWidth={2.5} />
+              <span className="text-red-600">⏸ DỪNG ĐỌC</span>
+            </>
+          ) : (
+            <>
+              <RotateCcw className="w-9 h-9 sm:w-10 sm:h-10 text-[#E65F2B]" strokeWidth={3} />
+              <span>🔄 NGHE LẠI</span>
+            </>
+          )}
+        </button>
 
         {/* Expandable full speech script for verification */}
         <div className="w-full border-t border-white/20 pt-4">

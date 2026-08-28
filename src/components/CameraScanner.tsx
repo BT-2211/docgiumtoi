@@ -57,6 +57,10 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const [countdownSeconds, setCountdownSeconds] = useState<number>(MULTI_SIDE_TIMEOUT_SECONDS);
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
 
+  // Smart Auto-Flash state
+  const [autoFlashNotice, setAutoFlashNotice] = useState<boolean>(false);
+  const manualTorchOverrideRef = useRef<boolean>(false);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -109,6 +113,67 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     setCountdownSeconds(MULTI_SIDE_TIMEOUT_SECONDS);
   };
 
+  // Smart Auto-Flash: Detect ambient light level from video stream and auto-trigger Flash
+  useEffect(() => {
+    if (!cameraActive) return;
+
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = 24;
+    offscreenCanvas.height = 24;
+    const ctx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+
+    const checkBrightnessInterval = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || !ctx) return;
+
+      try {
+        ctx.drawImage(video, 0, 0, 24, 24);
+        const frameData = ctx.getImageData(0, 0, 24, 24);
+        const data = frameData.data;
+        let totalBrightness = 0;
+        const totalPixels = 24 * 24;
+
+        for (let i = 0; i < data.length; i += 4) {
+          totalBrightness += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        }
+
+        const avgBrightness = totalBrightness / totalPixels;
+
+        // If environment is dark (< 48 luminance out of 255) and user hasn't manually overridden
+        if (avgBrightness < 48 && !torchOn && !manualTorchOverrideRef.current) {
+          triggerAutoFlash();
+        }
+      } catch (err) {
+        // Ignore cross-origin issues
+      }
+    }, 1200);
+
+    return () => {
+      clearInterval(checkBrightnessInterval);
+    };
+  }, [cameraActive, torchOn, hasTorch]);
+
+  const triggerAutoFlash = async () => {
+    if (streamRef.current && hasTorch) {
+      const track = streamRef.current.getVideoTracks()[0];
+      try {
+        await (track as any).applyConstraints({
+          advanced: [{ torch: true }],
+        });
+      } catch (e) {
+        console.warn('Auto torch apply failed:', e);
+      }
+    }
+    setTorchOn(true);
+    setAutoFlashNotice(true);
+    if (settings.soundFeedback) {
+      speechService.playFeedbackSound('beep');
+    }
+    setTimeout(() => {
+      setAutoFlashNotice(false);
+    }, 4500);
+  };
+
   // Initialize camera stream
   const startCamera = async () => {
     try {
@@ -156,6 +221,8 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       videoRef.current.srcObject = null;
     }
     setCameraActive(false);
+    setTorchOn(false);
+    setAutoFlashNotice(false);
   };
 
   useEffect(() => {
@@ -170,15 +237,22 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   };
 
   const toggleTorch = async () => {
-    if (!streamRef.current) return;
-    const track = streamRef.current.getVideoTracks()[0];
-    try {
-      await (track as any).applyConstraints({
-        advanced: [{ torch: !torchOn }],
-      });
-      setTorchOn(!torchOn);
-    } catch (e) {
-      console.warn('Torch toggle failed:', e);
+    const nextState = !torchOn;
+    manualTorchOverrideRef.current = !nextState; // If turning off manually, respect override
+
+    if (streamRef.current && hasTorch) {
+      const track = streamRef.current.getVideoTracks()[0];
+      try {
+        await (track as any).applyConstraints({
+          advanced: [{ torch: nextState }],
+        });
+      } catch (e) {
+        console.warn('Torch toggle failed:', e);
+      }
+    }
+    setTorchOn(nextState);
+    if (nextState) {
+      setAutoFlashNotice(false);
     }
   };
 
@@ -457,7 +531,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           playsInline
           muted
           autoPlay
-          className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
+          className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'} ${
+            torchOn ? 'brightness-110 contrast-105' : ''
+          }`}
         />
 
         {/* Minimalist Top Notification Pill Badge */}
@@ -485,6 +561,17 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             )}
           </div>
         </div>
+
+        {/* Smart Auto-Flash Toast Notification */}
+        {autoFlashNotice && (
+          <div
+            id="toast-auto-flash-notification"
+            className="absolute bottom-4 inset-x-4 mx-auto max-w-sm bg-yellow-400 text-yellow-950 border-2 border-yellow-200 px-4 py-2.5 rounded-full shadow-2xl flex items-center justify-center gap-2 z-20 animate-bounce font-black text-xs sm:text-sm text-center"
+          >
+            <span className="text-base">💡</span>
+            <span>Đã tự động bật đèn Flash để đọc rõ hơn ạ</span>
+          </div>
+        )}
 
         {/* Fallback if camera is inactive / Access Request */}
         {!cameraActive && (
@@ -524,24 +611,38 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         {/* Camera Control Overlays (Top-Right) */}
         {cameraActive && (
           <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-            {hasTorch && (
-              <button
-                onClick={toggleTorch}
-                className={`p-3 rounded-full shadow-lg cursor-pointer transition-all ${
-                  torchOn ? 'bg-[#E65F2B] text-white ring-2 ring-white' : 'bg-black/60 text-white hover:bg-black/80'
-                }`}
-                title="Bật/Tắt đèn pin"
-              >
-                {torchOn ? <Zap className="w-6 h-6" /> : <ZapOff className="w-6 h-6" />}
-              </button>
-            )}
-
+            {/* Manual Flash Toggle Button */}
             <button
+              id="btn-toggle-flash-manual"
+              onClick={toggleTorch}
+              className={`min-h-[44px] px-3.5 py-2 rounded-full flex items-center gap-1.5 font-black text-xs sm:text-sm shadow-xl backdrop-blur-md border-2 transition-all cursor-pointer ${
+                torchOn
+                  ? 'bg-yellow-400 text-yellow-950 border-yellow-200 ring-2 ring-yellow-400'
+                  : 'bg-black/60 text-white border-white/30 hover:bg-black/80'
+              }`}
+              title={torchOn ? 'Tắt đèn Flash' : 'Bật đèn Flash'}
+            >
+              {torchOn ? (
+                <>
+                  <Zap className="w-4 h-4 fill-current text-yellow-950 animate-pulse" />
+                  <span className="uppercase tracking-wider">FLASH: BẬT</span>
+                </>
+              ) : (
+                <>
+                  <ZapOff className="w-4 h-4 text-gray-300" />
+                  <span className="uppercase tracking-wider">FLASH: TẮT</span>
+                </>
+              )}
+            </button>
+
+            {/* Flip camera */}
+            <button
+              id="btn-toggle-camera-facing"
               onClick={toggleCameraFacing}
-              className="p-3 rounded-full bg-black/60 text-white shadow-lg hover:bg-black/80 cursor-pointer transition-all"
+              className="w-11 h-11 rounded-full bg-black/60 text-white shadow-lg hover:bg-black/80 flex items-center justify-center border border-white/30 cursor-pointer transition-all"
               title="Đổi camera trước/sau"
             >
-              <RefreshCw className="w-6 h-6" />
+              <RefreshCw className="w-5 h-5" />
             </button>
           </div>
         )}
