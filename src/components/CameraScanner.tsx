@@ -500,6 +500,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
   // Capture current camera frame with simultaneous flash activation and post-capture shutoff
   const capturePhoto = async () => {
+    // Prime and unlock audio context immediately on direct user click
+    speechService.primeAudio();
+
     if (!videoRef.current || !cameraActive) {
       if (fileInputRef.current) {
         fileInputRef.current.click();

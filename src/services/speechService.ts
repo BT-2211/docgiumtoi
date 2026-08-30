@@ -9,6 +9,7 @@ class SpeechService {
   private isMuted: boolean = false;
   private onStateChangeCallbacks: Set<(state: { isSpeaking: boolean; isPaused: boolean }) => void> = new Set();
   private audioCtx: AudioContext | null = null;
+  private primedAudio: HTMLAudioElement | null = null;
 
   // Session ID to completely eliminate audio overlap
   private sessionId: number = 0;
@@ -19,6 +20,30 @@ class SpeechService {
   private currentRate: number = 1.0;
   private currentAudio: HTMLAudioElement | null = null;
   private playbackTimer: any = null;
+
+  // Prime and unlock browser audio on user gesture (e.g. clicking Capture)
+  public primeAudio() {
+    try {
+      if (!this.audioCtx) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          this.audioCtx = new AudioContextClass();
+        }
+      }
+      if (this.audioCtx && this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume();
+      }
+
+      if (!this.primedAudio) {
+        this.primedAudio = new Audio();
+      }
+      // Play a tiny silent data URI to unlock HTML5 Audio autoplay permissions
+      this.primedAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      this.primedAudio.play().catch(() => {});
+    } catch (e) {
+      console.warn('Audio prime error:', e);
+    }
+  }
 
   public setMuted(muted: boolean) {
     this.isMuted = muted;
@@ -227,18 +252,65 @@ class SpeechService {
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch((err) => {
-          console.warn('Lỗi autoplay audio:', err);
+          console.warn('Lỗi autoplay audio proxy, chuyển sang WebSpeech/Direct:', err);
           if (this.sessionId === session && this.currentAudio === audio) {
             this.currentAudio = null;
-            if (!this.isPaused && this.isSpeaking && !this.isMuted) {
-              this.currentSentenceIndex++;
-              this.playNextSentence(session);
-            }
+            // Immediate fallback to Web Speech API to guarantee elderly user hears audio
+            this.speakWithWebSpeech(sentence, session);
           }
         });
       }
     } catch (err) {
       console.warn('Audio initialization error:', err);
+      if (this.sessionId === session) {
+        this.speakWithWebSpeech(sentence, session);
+      }
+    }
+  }
+
+  private speakWithWebSpeech(sentence: string, session: number) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      if (this.sessionId === session) {
+        this.currentSentenceIndex++;
+        this.playNextSentence(session);
+      }
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(sentence);
+      utterance.lang = 'vi-VN';
+      utterance.rate = this.currentRate || 0.9;
+
+      const voices = window.speechSynthesis.getVoices();
+      const viVoice = voices.find(
+        (v) => v.lang.toLowerCase().includes('vi') || v.lang.toLowerCase().includes('vn')
+      );
+      if (viVoice) {
+        utterance.voice = viVoice;
+      }
+
+      utterance.onend = () => {
+        if (this.sessionId === session) {
+          if (!this.isPaused && this.isSpeaking && !this.isMuted) {
+            this.currentSentenceIndex++;
+            this.playbackTimer = setTimeout(() => {
+              this.playNextSentence(session);
+            }, 100);
+          }
+        }
+      };
+
+      utterance.onerror = () => {
+        if (this.sessionId === session) {
+          this.currentSentenceIndex++;
+          this.playNextSentence(session);
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
       if (this.sessionId === session) {
         this.currentSentenceIndex++;
         this.playNextSentence(session);

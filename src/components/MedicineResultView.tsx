@@ -71,11 +71,11 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
     const fullText = getFullSpeechText();
     let timer: any = null;
     if (fullText) {
-      // Dừng các âm thanh camera trước đó và tự động đọc ngay lập tức
+      // Dừng âm thanh cũ và phát giọng đọc thành tiếng ngay lập tức mà không cần bấm nút trước
       speechService.stop();
       timer = setTimeout(() => {
         speechService.speak(fullText, settings.speechRate || 0.85);
-      }, 150);
+      }, 50);
     }
 
     return () => {
@@ -213,18 +213,6 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             Khác mặt 1
           </span>
         </div>
-      ) : isNeedSecondSide ? (
-        <div className="flex items-center justify-between bg-blue-50 border-2 border-blue-300 rounded-[24px] px-5 py-3.5 shadow-sm">
-          <div className="flex items-center gap-2.5 text-blue-900">
-            <RotateCcw className="w-7 h-7 text-blue-600 shrink-0" strokeWidth={2.75} />
-            <span className="text-lg sm:text-xl font-black uppercase tracking-wide">
-              CẦN CHỤP THÊM MẶT SAU / MẶT ĐÁY
-            </span>
-          </div>
-          <span className="text-xs sm:text-sm font-black bg-blue-200 text-blue-900 px-3 py-1.5 rounded-full uppercase tracking-wider">
-            Chưa thấy HSD
-          </span>
-        </div>
       ) : isIndividualPack ? (
         <div className={`flex items-center justify-between ${isMedicine ? 'bg-red-50 border-2 border-red-300' : 'bg-amber-50 border-2 border-amber-300'} rounded-[24px] px-5 py-3.5 shadow-sm`}>
           <div className={`flex items-center gap-2.5 ${isMedicine ? 'text-red-900' : 'text-amber-900'}`}>
@@ -237,7 +225,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             Không in HSD lẻ
           </span>
         </div>
-      ) : (
+      ) : !isNeedSecondSide ? (
         <div className="flex items-center justify-between bg-amber-50 border-2 border-amber-300 rounded-[24px] px-5 py-3.5 shadow-sm">
           <div className="flex items-center gap-2.5 text-amber-900">
             <AlertTriangle className="w-7 h-7 text-amber-600 shrink-0" strokeWidth={2.75} />
@@ -249,7 +237,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             Cần chụp lại
           </span>
         </div>
-      )}
+      ) : null}
 
       {/* Optional Captured Image Thumbnail */}
       {imagePreview && (
