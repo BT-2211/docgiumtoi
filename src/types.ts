@@ -25,6 +25,12 @@ export interface MedicineAnalysisResult {
   status?: 'success' | 'unclear' | 'not_found' | 'need_second_side' | 'individual_pack' | 'cross_product_mismatch';
   item_type?: ItemType;
   item_name?: string;
+  Text_In_Phun_1?: string;
+  Text_Chu_Nho_xung_quanh?: string;
+  raw_text_inkjet?: string;
+  raw_text_fine_print?: string;
+  after_opening_instruction?: string;
+  opened_storage_note?: string;
   detected_mfg_date?: string;
   has_mfg_label?: boolean;
   detected_shelf_life?: string;

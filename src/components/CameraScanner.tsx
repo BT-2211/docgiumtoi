@@ -29,6 +29,7 @@ const MULTI_SIDE_TIMEOUT_SECONDS = 45;
 
 interface CameraScannerProps {
   settings: SeniorSettings;
+  isActive?: boolean;
   onAnalysisSuccess: (result: MedicineAnalysisResult, imagePreview?: string) => void;
   onError: (errorMsg: string) => void;
 }
@@ -37,6 +38,7 @@ export type ScanMode = 'ALL_INFO' | 'EXPIRATION_FOCUS';
 
 export const CameraScanner: React.FC<CameraScannerProps> = ({
   settings,
+  isActive = true,
   onAnalysisSuccess,
   onError,
 }) => {
@@ -214,7 +216,17 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          // Explicitly turn off hardware flashlight before closing track to avoid lingering LED on mobile
+          (track as any).applyConstraints?.({
+            advanced: [{ torch: false }],
+          });
+        } catch {
+          // ignore
+        }
+        track.stop();
+      });
       streamRef.current = null;
     }
     if (videoRef.current) {
@@ -226,11 +238,31 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   };
 
   useEffect(() => {
-    startCamera();
+    if (isActive) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
     return () => {
       stopCamera();
     };
-  }, [facingMode]);
+  }, [facingMode, isActive]);
+
+  // Turn off camera & flash when user switches browser tab or minimizes app
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopCamera();
+      } else if (isActive) {
+        startCamera();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isActive, facingMode]);
 
   const toggleCameraFacing = () => {
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));

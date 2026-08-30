@@ -123,73 +123,45 @@ THÔNG TIN THỜI GIAN HỆ THỐNG:
 ${isSecondSideMode ? `- BỐI CẢNH LƯỢT CHỤP MẶT 2: Người dùng vừa chụp mặt 1 của sản phẩm: "${previousItemName || 'Sản phẩm trước'}". Lượt chụp này là để tìm Hạn Sử Dụng (HSD) và đối chiếu xác thực sản phẩm.` : ''}
 
 ========================================================================
-QUY TRÌNH KIỂM TRA NHÃN CHỮ & TÍNH HSD TỪ NSX (STRICT CHAIN OF THOUGHT):
+QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TRỌNG):
 ========================================================================
 
-1. QUY TẮC KIỂM TRA NHÃN CHỮ (LABEL DETECTION):
-- Tìm tất cả chuỗi ngày tháng dạng DD/MM/YYYY, MM/DD/YYYY, YYYY/MM/DD, DD.MM.YYYY.
-- Soi KỸ các ký tự đứng TRƯỚC hoặc SAU chuỗi ngày đó:
-  + Nếu có chữ: "NSX" / "MFG" / "Ngày sản xuất" / "PROD" / "DOM" / "Production Date":
-    * ĐÂY LÀ NGÀY SẢN XUẤT ("detected_mfg_date", "mfg_date").
-    * Gán "has_mfg_label": true.
-    * TUYỆT ĐỐI CẤM KHÔNG ĐƯỢC GÁN TRỰC TIẾP VÀO "expiry_date" HOẶC ĐỌC LÀM HSD!
-  + Nếu có chữ: "HSD" / "EXP" / "BEST BEFORE" / "USE BY" / "Hạn sử dụng" / "Expiry":
-    * ĐÂY MỚI LÀ HSD DIRECT (Hạn sử dụng trực tiếp in trên bao bì).
-    * Gán "has_mfg_label": false (hoặc true nếu có thêm dòng NSX riêng).
-    * Gán "expiry_date" và "calculated_expiry_date" = ngày đó, "is_calculated": false.
+1. KHÔNG ĐƯỢC TỰ SUY ĐOÁN (KHI THẤY DÃY SỐ ĐƠN LẺ KHÔNG CÓ NHÃN):
+- Nếu chỉ thấy một dãy số/ngày tháng (ví dụ: "14.05.26", "14.05.26 B1", "10/01/2026", "260514") mà KHÔNG CÓ chữ nhãn đi kèm (như HSD, EXP, Best Before, NSX, MFG, PROD):
+  + TUYỆT ĐỐI KHÔNG được tự ý khẳng định đó là "Hạn sử dụng" hay "Ngày sản xuất".
+  + Bắt buộc gán "status": "unclear".
+  + Điền "Text_In_Phun_1" = dãy số thấy được.
+  + Gán "speech_text": "Dạ cháu tìm thấy dãy số [dãy số] nhưng không có chữ HSD hay NSX đi kèm. Bác vui lòng xoay gói bánh tìm chữ HSD hoặc đưa mặt trước lên giúp cháu ạ!" (lễ phép, chỉ dùng từ kết câu là "ạ").
 
-2. LOGIC TÍNH HẠN SỬ DỤNG TỪ NSX (Gouté Rule - BẮT BUỘC):
-- Nếu chỉ tìm thấy NSX (ví dụ: "10/01/2026") VÀ dòng chữ quy định thời hạn (ví dụ: "Hạn sử dụng: 12 tháng kể từ NSX", "12 tháng kể từ ngày sản xuất", "HSD 12 tháng"):
-  * "detected_mfg_date": "10/01/2026"
-  * "has_mfg_label": true
-  * "detected_shelf_life": "12 tháng"
-  * "shelf_life_months": 12
-  * "is_calculated": true
-  * "calculated_expiry_date": Tự động cộng [detected_mfg_date] + [12 tháng] = "10/01/2027"
-  * "expiry_date": "10/01/2027"
-  * "expiry_calculation_note": "Tính từ NSX: 10/01/2026 + 12 tháng = 10/01/2027"
-  * So sánh HSD "10/01/2027" với NGÀY HIỆN TẠI (${currentDateStr}) để gán "is_expired".
-  * TUYỆT ĐỐI KHÔNG ĐƯỢC LẤY "10/01/2026" LÀM HSD!
+2. CHỈ XÁC NHẬN HSD KHI:
+- Thấy rõ các chữ: "HSD", "Hạn sử dụng", "EXP", "EXPIRY", "Best Before", "Use By" ngay cạnh hoặc ngay phía trên/dưới dãy số.
+- Khi đó mới gán làm HSD trực tiếp ("expiry_date" = ngày đó, "is_calculated": false, "status": "success").
+- Mẫu phát âm: "Dạ sản phẩm này có hạn sử dụng đến ngày [HSD] ạ!"
 
-3. LỜI THOẠI TRỢ LÝ (speech_text) & GIẢI THÍCH MINH BẠCH:
-- NẾU tính từ NSX: Phải giải thích rõ ràng ngày sản xuất và dùng tốt đến tháng/năm nào.
-- VÍ DỤ MẪU (FEW-SHOT EXAMPLES):
-  + Ví dụ 1 (Gouté Rule - NSX 10/01/2026, HSD 12 tháng):
-    {
-      "detected_mfg_date": "10/01/2026",
-      "has_mfg_label": true,
-      "detected_shelf_life": "12 tháng",
-      "shelf_life_months": 12,
-      "is_calculated": true,
-      "calculated_expiry_date": "10/01/2027",
-      "expiry_date": "10/01/2027",
-      "speech_text": "Dạ sản phẩm này sản xuất ngày 10 tháng 01 năm 2026, hạn sử dụng 12 tháng nên Bác dùng tốt đến ngày 10 tháng 01 năm 2027 ạ!"
-    }
-  + Ví dụ 2 (Có EXP in trực tiếp):
-    {
-      "detected_mfg_date": "",
-      "has_mfg_label": false,
-      "detected_shelf_life": "",
-      "shelf_life_months": 0,
-      "is_calculated": false,
-      "calculated_expiry_date": "20/12/2026",
-      "expiry_date": "20/12/2026",
-      "speech_text": "Dạ sản phẩm này có hạn sử dụng đến ngày 20 tháng 12 năm 2026 ạ!"
-    }
-  + Ví dụ 3 (Có cả NSX và HSD in riêng):
-    {
-      "detected_mfg_date": "15/08/2024",
-      "has_mfg_label": true,
-      "detected_shelf_life": "36 tháng",
-      "shelf_life_months": 36,
-      "is_calculated": false,
-      "calculated_expiry_date": "15/08/2027",
-      "expiry_date": "15/08/2027",
-      "speech_text": "Dạ sản phẩm này sản xuất ngày 15 tháng 08 năm 2024, hạn sử dụng đến ngày 15 tháng 08 năm 2027 ạ!"
-    }
+3. CHỈ XÁC NHẬN NSX KHI:
+- Thấy rõ các chữ: "NSX", "Ngày sản xuất", "MFG", "PROD", "DOM" ngay cạnh hoặc ngay phía trên/dưới dãy số.
+- TUYỆT ĐỐI CẤM KHÔNG ĐƯỢC gán ngày này làm HSD.
+- NẾU có dòng chữ thời hạn (Ví dụ "Hạn sử dụng 12 tháng kể từ NSX"): Lấy [NSX] + [Thời hạn] -> Tính ra HSD mới ("is_calculated": true, "expiry_date": [HSD tính toán]).
+  * Mẫu phát âm: "Dạ sản phẩm này sản xuất ngày [NSX], hạn sử dụng [X] tháng nên Bác dùng tốt đến [HSD tính toán] ạ!"
+- NẾU KHÔNG có dòng chữ thời hạn:
+  * "expiry_date": "Chỉ có NSX - Chưa thấy HSD", "is_expired": false.
+  * Mẫu phát âm (Thực phẩm): "Dạ cháu chỉ thấy ngày sản xuất là [NSX] chứ chưa thấy thông tin hạn sử dụng. Bác lật mặt khác bấm chụp lại hoặc nhờ con cháu kiểm tra giúp ạ!"
+  * Mẫu phát âm (Thuốc): "Bác ơi, sản phẩm này chỉ ghi ngày sản xuất là [NSX] chứ không thấy hạn sử dụng. Để an toàn, Bác không nên tự ý dùng khi chưa hỏi lại dược sĩ hoặc con cháu ạ!"
 
-CẤM TIỆT:
-- KHÔNG ĐƯỢC đọc trực tiếp mfg_date (NSX) làm HSD nếu trên bao bì có chữ "NSX" hoặc "MFG"!
+4. NẾU ẢNH BỊ MỜ / THIẾU TÊN SẢN PHẨM:
+- Nếu chỉ quay mặt hông/mặt đáy/gói lẻ không có tên thương hiệu sản phẩm: Hãy gán "status": "unclear" hoặc "need_second_side" và nhắc người dùng đưa mặt chính/mặt trước của sản phẩm vào khung hình.
+
+5. BẢO QUẢN & SAU KHI MỞ NẮP (SỮA THANH TRÙNG / ĐỒ TƯƠI):
+- Nếu quét thấy dòng chữ hướng dẫn sau khi mở nắp (Ví dụ: "Dùng trong 24 giờ sau khi mở nắp", "Dùng trong 3 ngày sau khi mở"):
+  -> BẮT BỘC điền vào trường "after_opening_instruction".
+  -> BẮT BỘC đọc kèm câu cảnh báo bảo quản này vào cuối câu trả lời (speech_text).
+- Mẫu câu phát âm:
+  "Dạ sản phẩm này có hạn sử dụng đến ngày [Ngày/Tháng/Năm]. Lưu ý nếu Bác đã mở nắp rồi thì nên dùng hết trong [24 giờ / 3 ngày] và bảo quản tủ lạnh ạ."
+
+6. XỬ LÝ KHI CHỮ QUÁ NHỎ HOẶC MỜ:
+- Nếu thấy sản phẩm nhưng chữ in HSD/NSX quá nhỏ hoặc mờ không đọc chắc chắn: Gán "status": "unclear", speech_text: "Cháu thấy [Tên sản phẩm/hộp bánh] rồi nhưng chữ in hạn sử dụng hơi nhỏ hoặc mờ. Bác đưa camera lại gần hơn một chút dưới ánh sáng rõ để cháu đọc lại ạ." (TUYỆT ĐỐI KHÔNG khẳng định ngay là sản phẩm không có HSD).
+
+CẤM: KHÔNG BAO GIỜ DÙNG "nhé ạ", "nha" MÀ CHỈ DÙNG "ạ" THÔI.
 
 ========================================================================
 YÊU CẦU XỬ LÝ THEO TỪNG LOẠI ĐỒ VẬT VÀ TÌNH HUỐNG:
@@ -208,15 +180,15 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
      + Gán "status": "cross_product_mismatch"
      + Gán "item_name": "[Tên sản phẩm vừa chụp]"
      + Gán "safety_alert": "Hình như Bác đang chụp một sản phẩm khác rồi ạ."
-     + Gán "speech_text": "Hình như Bác đang chụp một sản phẩm khác rồi ạ. Bác kiểm tra lại đúng ${previousItemName ? previousItemName : 'sản phẩm'} lúc nãy để cháu đọc lại ạ!" (Chỉ dùng từ 'ạ', tuyệt đối KHÔNG dùng 'nhé ạ').
+     + Gán "speech_text": "Hình như Bác đang chụp một sản phẩm khác rồi ạ. Bác kiểm tra lại đúng ${previousItemName ? previousItemName : 'sản phẩm'} lúc nãy để cháu đọc lại ạ!"
    - NẾU ĐÚNG LÀ MẶT SAU / MẶT ĐÁY CỦA CÙNG SẢN PHẨM:
-     + Đọc Hạn sử dụng (HSD/EXP/MFG/NSX) theo đúng QUY TRÌNH 4 BƯỚC ở trên.
+     + Đọc Hạn sử dụng theo đúng NGUYÊN TẮC BỐC TÁCH VĂN BẢN TRƯỚC - SUY LUẬN SAU.
      + Nếu tìm thấy HSD: Gán "status": "success", điền đầy đủ "expiry_date", "mfg_date", so sánh hạn với ngày hiện tại.` : `   - Nếu không trong chế độ chụp mặt 2, bỏ qua bước kiểm tra cross-product.`}
 
 3. XỬ LÝ 2 KỊCH BẢN ĐẶC BIỆT KHÔNG THẤY HẠN SỬ DỤNG (EXPIRY EDGE-CASES):
 
    * KỊCH BẢN 1: CHỤP MẶT TRƯỚC HỘP (THIẾU HSD TRÊN MẶT NÀY)
-     - Điều kiện: Nhận diện được tên sản phẩm/thuốc/hàng tiêu dùng nhưng KHÔNG tìm thấy ký tự HSD/EXP/MFG/NSX/Ngày sản xuất trên mặt ảnh này (do hạn in ở mặt sau/mặt đáy/nắp).
+     - Điều kiện: Nhận diện được tên sản phẩm/thuốc/hàng tiêu dùng nhưng KHÔNG tìm thấy ký tự HSD/EXP/MFG/NSX trên mặt ảnh này.
      - Action:
        + Gán "status": "need_second_side"
        + Gán "item_name": "[Tên sản phẩm/thuốc nhận diện được]"
@@ -233,7 +205,6 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
        + "safety_alert": "LƯU Ý: Đây là gói lẻ không ghi hạn sử dụng trên vỏ."
        + "usage_instructions": "Nếu vỏ hộp lớn mua đã lâu hoặc có dấu hiệu bị hỏng, Bác không nên dùng để đảm bảo sức khỏe ạ."
        + "speech_text": "Dạ đây là gói lẻ nên không ghi hạn sử dụng trên vỏ ạ. Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ."
-       + TUYỆT ĐỐI KHÔNG khuyên dùng theo chỉ định bác sĩ.
      - Nếu là THUỐC / DƯỢC PHẨM XÉ LẺ (MEDICINE):
        + Gán "item_type": "MEDICINE"
        + "expiry_date": "Vỉ thuốc xé lẻ - Không có HSD"
@@ -247,29 +218,24 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
      * Có liều dùng rõ ràng trên ảnh -> Đọc rõ liều dùng (ví dụ: "Uống 1 viên sau khi ăn sáng no ạ.").
      * Không thấy liều dùng -> BẮT BUỘC trả về chính xác: "Bác dùng theo đơn thuốc của bác sĩ hoặc hướng dẫn trên bao bì ạ."
    - Nếu là CONSUMER_GOODS (Bánh/Nước/Thực phẩm/Đồ tiêu dùng):
-     * Trả về cách ăn/uống hoặc bảo quản/sử dụng (Ví dụ: "Bóc vỏ ăn trực tiếp, bảo quản nơi khô ráo thoáng mát ạ." hoặc "Dùng ngoài da để gội đầu, tránh để bọt dính vào mắt ạ.").
+     * Trả về cách ăn/uống hoặc bảo quản/sử dụng (Ví dụ: "Bóc vỏ ăn trực tiếp, bảo quản nơi khô ráo thoáng mát ạ.").
    - Nếu là PERSONAL_ITEM (Ví/Điện thoại/Chìa khóa/Mắt kính/Đồ cá nhân):
-     * TUYỆT ĐỐI KHÔNG KHUYÊN DÙNG THEO BÁC SĨ HOẶC UỐNG THUỐC.
-     * Trả về lời nhắc tiện ích thân thương (Ví dụ:
-       - Với Ví tiền: "Bác nhớ cất ví vào túi hoặc kệ quen thuộc kẻo quên ạ!"
-       - Với Điện thoại: "Điện thoại của Bác, Bác nhớ sạc pin nếu thấy báo yếu ạ!"
-       - Với Chìa khóa: "Chìa khóa của Bác, Bác nhớ móc vào chỗ quen để khi cần dễ tìm ạ!"
-       - Với Kính mắt: "Kính mắt của Bác, Bác nhớ cất vào hộp hoặc để mặt bàn quen thuộc ạ!"
-       - Với Đồ cá nhân khác: "Đồ dùng cá nhân của Bác, Bác nhớ cất gọn gàng vào nơi quen thuộc để dễ lấy ạ!").
+     * Trả về lời nhắc tiện ích thân thương (Ví dụ: "Bác nhớ cất gọn gàng vào nơi quen thuộc để dễ lấy ạ!").
 
 5. CẢNH BÁO AN TOÀN (safety_alert):
-   - Điền thông tin khi có cảnh báo nguy hiểm thực sự (như sản phẩm hết hạn, thuốc xé lẻ mất HSD, hoặc cảnh báo chống chỉ định).
+   - Điền thông tin khi có cảnh báo nguy hiểm thực sự (như sản phẩm hết hạn, thuốc xé lẻ mất HSD).
    - Nếu sản phẩm bình thường hoặc là đồ cá nhân an toàn, để chuỗi rỗng: "".
 
-6. XỬ LÝ CÁC EDGE CASES KHÁC (Ảnh mờ, Lóa sáng, Run tay, Bấm nhầm):
-   - Nếu ảnh quá lóa, bị mất nét do run tay, hoặc không thấy rõ chữ: Gán "status": "unclear", speech_text: "Bác ơi, ảnh bị lóa hoặc mờ nét rồi. Bác giữ chắc tay và chụp lại giúp cháu ạ."
+6. XỬ LÝ CÁC EDGE CASES KHÁC (Ảnh mờ, Lóa sáng, Run tay, Chữ quá nhỏ, Bấm nhầm):
+   - Nếu thấy sản phẩm (hộp bánh, vỉ thuốc, chai lọ...) nhưng chữ in HSD/NSX quá nhỏ hoặc mờ không đọc chắc chắn: Gán "status": "unclear", speech_text: "Cháu thấy [Tên sản phẩm/hộp bánh] rồi nhưng chữ in hạn sử dụng hơi nhỏ hoặc mờ. Bác đưa camera lại gần hơn một chút dưới ánh sáng rõ để cháu đọc lại ạ." (TUYỆT ĐỐI KHÔNG khẳng định ngay là sản phẩm không có HSD).
+   - Nếu ảnh quá lóa, bị mất nét toàn bộ do run tay: Gán "status": "unclear", speech_text: "Bác ơi, ảnh bị lóa hoặc mờ nét rồi. Bác giữ chắc tay và chụp lại giúp cháu ạ."
    - Nếu không tìm thấy vật thể/sản phẩm: Gán "status": "not_found", "item_type": "UNKNOWN", speech_text: "Dạ thưa Bác, cháu chưa tìm thấy đồ vật trong ảnh. Bác đưa đồ vật lại gần camera và chụp lại giúp cháu ạ."
    - Nếu đọc được rõ ràng: Gán "status": "success".
 
 7. FORMAT ĐỌC THẠO MỒNG MỘT (speech_text):
    - Lời thoại phải NGẮN GỌN (dưới 45 từ), lễ phép (dùng "Bác", "Cháu"), đọc chậm rãi.
    - QUY TẮC NGÔN TỪ: Tuyệt đối KHÔNG dùng "nhé ạ" hay "nhé", cuối câu luôn dùng từ "ạ" (hoặc "ạ!").
-   - Phiên âm tên tiếng Anh khó đọc sang cách đọc tiếng Việt dễ hiểu (Ví dụ: iPhone -> Ai-phôn, Nokia -> Nô-ki-a, Paracetamol -> Pa-ra-se-ta-mol, Panadol -> Pa-na-đon, Amlodipine -> Am-lô-đi-pin, Sunsilk -> Săn-sêu).
+   - Phiên âm tên tiếng Anh khó đọc sang cách đọc tiếng Việt dễ hiểu.
 `;
 
       const contents: any = [];
@@ -305,6 +271,18 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
           item_name: {
             type: Type.STRING,
             description: "Tên sản phẩm/đồ vật rõ ràng, kèm phiên âm nếu là tiếng Anh",
+          },
+          Text_In_Phun_1: {
+            type: Type.STRING,
+            description: "BƯỚC 1: Trích xuất chính xác chuỗi số + chữ đi sát nó trên bao bì. Ví dụ: 'NSX 10/01/2026', 'EXP 20/12/2026', hoặc '10/01/2026'",
+          },
+          Text_Chu_Nho_xung_quanh: {
+            type: Type.STRING,
+            description: "BƯỚC 1: Trích xuất chính xác dòng chữ nhỏ quy định thời hạn nếu có. Ví dụ: 'Hạn sử dụng 12 tháng kể từ ngày sản xuất', hoặc rỗng ''",
+          },
+          after_opening_instruction: {
+            type: Type.STRING,
+            description: "Hướng dẫn bảo quản sau khi mở nắp nếu có (ví dụ: 'Dùng trong 24 giờ sau khi mở nắp', 'Dùng trong 3 ngày sau khi mở'), hoặc rỗng ''",
           },
           detected_mfg_date: {
             type: Type.STRING,
@@ -371,6 +349,8 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
           "status",
           "item_type",
           "item_name",
+          "Text_In_Phun_1",
+          "Text_Chu_Nho_xung_quanh",
           "detected_mfg_date",
           "has_mfg_label",
           "detected_shelf_life",
@@ -413,10 +393,25 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
             model: modelName,
             contents: { parts: contents },
             config: {
-              systemInstruction:
-                "Bạn là Trợ lý AI đọc chữ dành cho người cao tuổi và người mắt kém tại Việt Nam. Phân tích chính xác theo từng loại đồ vật và trả về JSON thuần theo schema.",
+              systemInstruction: `Bạn là Trợ lý AI đọc chữ dành cho người cao tuổi và người mắt kém tại Việt Nam. Nhiệm vụ của bạn là phân tích hình ảnh và trả về JSON thuần theo đúng schema được yêu cầu.
+
+QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TRỌNG):
+1. KHÔNG ĐƯỢC TỰ SUY ĐOÁN: Nếu chỉ thấy một dãy số/ngày tháng (ví dụ: "14.05.26", "14.05.26 B1") mà KHÔNG CÓ chữ nhãn đi kèm (như HSD, EXP, Best Before, NSX, MFG):
+   - TUYỆT ĐỐI KHÔNG được khẳng định đó là "Hạn sử dụng" hay "Ngày sản xuất".
+   - Bắt buộc trả về status: "unclear" (hoặc "warning" tùy schema của bạn).
+   - Trong phần lời nói/thông báo cho người dùng, hãy nói rõ: "Tìm thấy dãy số 14.05.26 nhưng không có chữ HSD hay NSX. Vui lòng xoay gói bánh tìm chữ HSD hoặc đưa mặt trước lên."
+
+2. CHỈ XÁC NHẬN HSD KHI:
+   - Thấy rõ các chữ: "HSD", "Hạn sử dụng", "EXP", "EXPIRY", "Best Before", "Use By" ngay cạnh hoặc ngay phía trên/dưới dãy số.
+
+3. CHỈ XÁC NHẬN NSX KHI:
+   - Thấy rõ các chữ: "NSX", "Ngày sản xuất", "MFG", "PROD" ngay cạnh hoặc ngay phía trên/dưới dãy số.
+
+4. NẾU ẢNH BỊ MỜ / THIẾU TÊN SẢN PHẨM:
+   - Nếu chỉ quay mặt hông/gói lẻ không có tên thương hiệu, hãy nhắc người dùng đưa mặt chính của sản phẩm vào khung hình.`,
               responseMimeType: "application/json",
               responseSchema: responseSchemaConfig,
+              temperature: 0,
             },
           });
 
@@ -446,12 +441,28 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
             const isIndividualPack = status === "individual_pack";
             const isCrossMismatch = status === "cross_product_mismatch";
 
-            const rawDetectedMfg = (rawJson.detected_mfg_date || rawJson.mfg_date || "").trim();
-            const hasMfgLabel = Boolean(rawJson.has_mfg_label || (rawDetectedMfg && true));
-            const rawDetectedShelfLife = (rawJson.detected_shelf_life || rawJson.shelf_life_text || "").trim();
+            const textInPhun1 = (rawJson.Text_In_Phun_1 || rawJson.raw_text_inkjet || "").trim();
+            const textChuNho = (rawJson.Text_Chu_Nho_xung_quanh || rawJson.raw_text_fine_print || rawJson.detected_shelf_life || rawJson.shelf_life_text || "").trim();
+            let afterOpeningInstruction = (rawJson.after_opening_instruction || "").trim();
+            if (!afterOpeningInstruction && textChuNho) {
+              const openMatch = textChuNho.match(/(dùng|sử dụng).{0,30}(sau khi mở|sau khi bóc|sau khi khui).{0,30}/i) || textChuNho.match(/sau khi mở.{0,30}(dùng|sử dụng|bảo quản).{0,30}/i);
+              if (openMatch) {
+                afterOpeningInstruction = openMatch[0];
+              }
+            }
+
+            let rawDetectedMfg = (rawJson.detected_mfg_date || rawJson.mfg_date || "").trim();
+            let isMfgInPhun = Boolean(textInPhun1.match(/NSX|MFG|PROD|DOM|Ngày\s*sản\s*xuất/i));
+            if (!rawDetectedMfg && isMfgInPhun) {
+              const dMatch = textInPhun1.match(/\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/);
+              if (dMatch) rawDetectedMfg = dMatch[0];
+            }
+
+            const hasMfgLabel = Boolean(rawJson.has_mfg_label || isMfgInPhun || (rawDetectedMfg && true));
+            const rawDetectedShelfLife = textChuNho;
             let shelfLifeMonths = typeof rawJson.shelf_life_months === "number" ? rawJson.shelf_life_months : 0;
             let isCalculated = Boolean(rawJson.is_calculated);
-            let calculatedExpiryDate = (rawJson.calculated_expiry_date || rawJson.expiry_date || "").trim();
+            let calculatedExpiryDate = (rawJson.calculated_expiry_date || "").trim();
             let calculationNote = (rawJson.expiry_calculation_note || "").trim();
 
             if (shelfLifeMonths === 0 && rawDetectedShelfLife) {
@@ -464,7 +475,10 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
               }
             }
 
-            // Programmatic safety check: If NSX was recognized and shelf life was given, but expiry_date was mistakenly identical to NSX, fix it!
+            // Case A: Only NSX found and NO shelf life specified
+            const isOnlyMfgNoShelfLife = hasMfgLabel && rawDetectedMfg && shelfLifeMonths === 0 && (!rawDetectedShelfLife || !rawDetectedShelfLife.match(/\d+/));
+
+            // Case B: NSX + Shelf Life (Gouté rule)
             if (rawDetectedMfg && (shelfLifeMonths > 0 || rawDetectedShelfLife) && (calculatedExpiryDate === rawDetectedMfg || !calculatedExpiryDate || calculatedExpiryDate.toLowerCase().includes("không"))) {
               let monthsToAdd = shelfLifeMonths;
               if (monthsToAdd === 0 && rawDetectedShelfLife) {
@@ -492,7 +506,12 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
               }
             }
 
-            const rawExpiryDate = calculatedExpiryDate || (rawJson.expiry_date || "").trim();
+            let rawExpiryDate = calculatedExpiryDate || (rawJson.expiry_date || "").trim();
+            if (isOnlyMfgNoShelfLife) {
+              rawExpiryDate = "Chỉ có NSX - Chưa thấy HSD";
+              calculatedExpiryDate = "";
+              isCalculated = false;
+            }
 
             const expiryDate = isPersonalItem
               ? "Không áp dụng"
@@ -502,7 +521,7 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
               ? (itemType === "MEDICINE" ? "Vỉ thuốc xé lẻ - Không có HSD" : "Gói bóc lẻ - Không ghi HSD")
               : (rawExpiryDate || "Không tìm thấy");
 
-            const isExpired = isPersonalItem || isNeedSecondSide || isIndividualPack || isCrossMismatch
+            const isExpired = isPersonalItem || isNeedSecondSide || isIndividualPack || isCrossMismatch || isOnlyMfgNoShelfLife
               ? false
               : Boolean(rawJson.is_expired);
 
@@ -519,6 +538,10 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
               defaultUsageInstructions = "Bác lật mặt sau hoặc mặt đáy của hộp rồi bấm chụp lại để xem hạn sử dụng ạ.";
             } else if (isCrossMismatch) {
               defaultUsageInstructions = `Bác vui lòng lấy đúng ${previousItemName || 'sản phẩm lúc nãy'} và chụp lại mặt sau ạ.`;
+            } else if (isOnlyMfgNoShelfLife) {
+              defaultUsageInstructions = itemType === "MEDICINE"
+                ? "Bác hỏi lại dược sĩ hoặc người thân trước khi dùng thuốc này ạ."
+                : "Bác kiểm tra các mặt khác của bao bì để tìm hạn sử dụng ạ.";
             } else if (itemType === "MEDICINE") {
               defaultUsageInstructions = "Bác dùng theo đơn thuốc của bác sĩ hoặc hướng dẫn trên bao bì ạ.";
             } else if (itemType === "PERSONAL_ITEM") {
@@ -547,7 +570,17 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
             safetyAlert = safetyAlert.replace(/nhé\s+ạ/gi, "ạ");
 
             let speechText = rawJson.speech_text || "";
-            if (!speechText) {
+            const isUnclearStandaloneNumber = (status === "unclear" || !rawJson.has_mfg_label && !rawJson.expiry_date) && textInPhun1 && !isMfgInPhun && !Boolean(textInPhun1.match(/HSD|EXP|Hạn\s*sử\s*dụng|Best\s*Before|Use\s*By/i)) && Boolean(textInPhun1.match(/\d/));
+
+            if (isOnlyMfgNoShelfLife) {
+              if (itemType === "MEDICINE") {
+                speechText = `Bác ơi, sản phẩm này chỉ ghi ngày sản xuất là ${rawDetectedMfg} chứ không thấy hạn sử dụng. Để an toàn, Bác không nên tự ý dùng khi chưa hỏi lại dược sĩ hoặc con cháu ạ!`;
+              } else {
+                speechText = `Dạ cháu chỉ thấy ngày sản xuất là ${rawDetectedMfg} chứ chưa thấy thông tin hạn sử dụng. Bác lật mặt khác bấm chụp lại hoặc nhờ con cháu kiểm tra giúp ạ!`;
+              }
+            } else if (isUnclearStandaloneNumber && (!speechText || status === "unclear")) {
+              speechText = `Dạ cháu tìm thấy dãy số ${textInPhun1} nhưng không có chữ HSD hay NSX. Bác vui lòng xoay gói bánh tìm chữ HSD hoặc đưa mặt trước lên giúp cháu ạ.`;
+            } else if (!speechText) {
               if (isCrossMismatch) {
                 speechText = `Hình như Bác đang chụp một sản phẩm khác rồi ạ. Bác kiểm tra lại đúng ${previousItemName || 'hộp sản phẩm'} lúc nãy để cháu đọc lại ạ!`;
               } else if (isNeedSecondSide) {
@@ -558,21 +591,42 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
                 } else {
                   speechText = "Dạ đây là gói lẻ nên không ghi hạn sử dụng trên vỏ ạ. Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ.";
                 }
+              } else if (isCalculated && rawDetectedMfg && calculatedExpiryDate) {
+                speechText = `Dạ sản phẩm này sản xuất ngày ${rawDetectedMfg}, hạn sử dụng ${shelfLifeMonths || 12} tháng nên Bác dùng tốt đến ngày ${calculatedExpiryDate} ạ!`;
+              } else if (expiryDate && !expiryDate.toLowerCase().includes("không")) {
+                speechText = `Dạ sản phẩm này có hạn sử dụng đến ngày ${expiryDate} ạ!`;
               }
             }
+
+            // Append after-opening storage note if present and not already mentioned
+            if (afterOpeningInstruction && (status === "success" || !isNeedSecondSide && !isIndividualPack && !isCrossMismatch)) {
+              if (!speechText.toLowerCase().includes("mở nắp") && !speechText.toLowerCase().includes("sau khi mở")) {
+                const durMatch = afterOpeningInstruction.match(/(\d+\s*(giờ|tiếng|ngày|ngay|h|days?|hours?))/i);
+                const durText = durMatch ? durMatch[1] : (afterOpeningInstruction.length < 30 ? afterOpeningInstruction : "thời gian quy định");
+                speechText = speechText.replace(/[\.\!\?ạ\s]+$/, "");
+                speechText = `${speechText}. Lưu ý nếu Bác đã mở nắp rồi thì nên dùng hết trong ${durText} và bảo quản tủ lạnh ạ.`;
+              }
+            }
+
             speechText = speechText.replace(/nhé\s+ạ/gi, "ạ").replace(/nhé\s+bác/gi, "Bác ạ");
 
             const expiryStatus = isPersonalItem
               ? "NOT_APPLICABLE"
               : isExpired
               ? "EXPIRED"
-              : (expiryDate && !expiryDate.toLowerCase().includes("không") && !isNeedSecondSide && !isIndividualPack && !isCrossMismatch ? "VALID" : "UNCLEAR");
+              : (expiryDate && !expiryDate.toLowerCase().includes("không") && !isNeedSecondSide && !isIndividualPack && !isCrossMismatch && !isOnlyMfgNoShelfLife ? "VALID" : "UNCLEAR");
 
             parsedData = {
               // Exact requested strict JSON structure
               status: status,
               item_type: itemType,
               item_name: itemName,
+              Text_In_Phun_1: textInPhun1,
+              Text_Chu_Nho_xung_quanh: textChuNho,
+              raw_text_inkjet: textInPhun1,
+              raw_text_fine_print: textChuNho,
+              after_opening_instruction: afterOpeningInstruction,
+              opened_storage_note: afterOpeningInstruction,
               detected_mfg_date: rawDetectedMfg,
               has_mfg_label: hasMfgLabel,
               detected_shelf_life: rawDetectedShelfLife,
@@ -608,6 +662,8 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
                   ? "Cần lật mặt sau / mặt đáy"
                   : isIndividualPack
                   ? (itemType === "MEDICINE" ? "Vỉ thuốc xé lẻ - Không có HSD" : "Gói bóc lẻ - Không ghi HSD")
+                  : isOnlyMfgNoShelfLife
+                  ? "Chỉ thấy NSX (Chưa rõ HSD)"
                   : expiryDate && !expiryDate.toLowerCase().includes("không")
                   ? `HSD: ${expiryDate}`
                   : "Không thấy rõ HSD",
@@ -622,6 +678,8 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
                   ? "Chưa thấy ngày HSD"
                   : isIndividualPack
                   ? (itemType === "MEDICINE" ? "Cảnh báo an toàn thuốc" : "Cần xem vỏ hộp lớn")
+                  : isOnlyMfgNoShelfLife
+                  ? "Cần xem mặt khác của hộp"
                   : isExpired
                   ? "Đã quá hạn sử dụng"
                   : "Còn hạn sử dụng",

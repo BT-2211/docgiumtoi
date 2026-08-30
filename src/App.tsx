@@ -196,6 +196,7 @@ export default function App() {
           ) : (
             <CameraScanner
               settings={settings}
+              isActive={activeTab === 'camera' && !currentResult}
               onAnalysisSuccess={handleAnalysisSuccess}
               onError={(msg) => setErrorMessage(msg)}
             />

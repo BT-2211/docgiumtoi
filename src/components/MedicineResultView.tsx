@@ -417,13 +417,15 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             </button>
           </div>
 
-          {/* Extra Expiration Metadata Sub-box (NSX, Quy định thời hạn, Phép tính) */}
+          {/* Extra Expiration Metadata Sub-box (NSX, Quy định thời hạn, Phép tính, Mở nắp) */}
           {(result.detected_mfg_date ||
             result.mfg_date ||
             result.expiration_info?.mfg_date_text ||
             result.detected_shelf_life ||
             result.shelf_life_text ||
             result.expiration_info?.shelf_life_text ||
+            result.after_opening_instruction ||
+            result.opened_storage_note ||
             result.expiry_calculation_note ||
             result.expiration_info?.calculation_note ||
             result.expiration_info?.location_found) && (
@@ -433,6 +435,18 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
               }`}
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(result.Text_In_Phun_1 || result.raw_text_inkjet) && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-black/10 px-2 py-0.5 rounded font-mono">In phun:</span>
+                    <span>{result.Text_In_Phun_1 || result.raw_text_inkjet}</span>
+                  </div>
+                )}
+                {(result.Text_Chu_Nho_xung_quanh || result.raw_text_fine_print) && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-black/10 px-2 py-0.5 rounded font-mono">Chữ nhỏ:</span>
+                    <span>{result.Text_Chu_Nho_xung_quanh || result.raw_text_fine_print}</span>
+                  </div>
+                )}
                 {(result.detected_mfg_date || result.mfg_date || result.expiration_info?.mfg_date_text) && (
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 shrink-0" />
@@ -455,6 +469,24 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {(result.after_opening_instruction || result.opened_storage_note) && (
+                <div
+                  className={`mt-1 px-3.5 py-2.5 rounded-[16px] text-xs sm:text-sm font-black flex items-start gap-2.5 ${
+                    isExpired
+                      ? 'bg-black/30 text-amber-200 border border-amber-400/30'
+                      : isValid
+                      ? 'bg-blue-600/15 text-blue-950 border border-blue-300/40'
+                      : 'bg-amber-400/30 text-amber-950 border border-amber-300'
+                  }`}
+                >
+                  <span className="text-base shrink-0">🥛</span>
+                  <div>
+                    <span className="uppercase tracking-wide font-black block text-[11px] opacity-80">Sau khi mở nắp:</span>
+                    <span>{result.after_opening_instruction || result.opened_storage_note}</span>
+                  </div>
+                </div>
+              )}
 
               {(result.expiry_calculation_note || result.expiration_info?.calculation_note) && (
                 <div
