@@ -94,6 +94,33 @@ export const SAMPLE_MEDICINES: SampleMedicine[] = [
     }
   },
   {
+    id: 'remote-appliance',
+    name: 'Điều Khiển Điều Hòa (Gia Dụng)',
+    category: 'Đồ Gia Dụng',
+    typeBadge: '🏠 Gia Dụng',
+    color: 'from-teal-700 to-emerald-900',
+    result: {
+      status: 'success',
+      item_type: 'PERSONAL_ITEM',
+      item_name: 'Điều Khiển Điều Hòa / Máy Lạnh',
+      item_category: 'PERSONAL_ITEM',
+      product_name: 'Điều Khiển Điều Hòa / Máy Lạnh',
+      usage_summary: 'Thiết bị gia dụng dùng để bật tắt và điều chỉnh nhiệt độ điều hòa trong phòng',
+      primary_purpose: 'Thiết bị gia dụng dùng để bật tắt và điều chỉnh nhiệt độ điều hòa trong phòng',
+      primary_function: 'Thiết bị gia dụng dùng để bật tắt và điều chỉnh nhiệt độ điều hòa trong phòng',
+      expiration_info: {
+        status: 'NOT_APPLICABLE',
+        expiry_date_text: 'Không áp dụng hạn dùng',
+        days_remaining_text: 'Đồ gia dụng trong nhà',
+      },
+      usage_instructions: 'Bác bấm nút ON/OFF màu đỏ để bật tắt, nút mũi tên lên xuống để tăng giảm nhiệt độ ạ!',
+      usage_instruction: 'Bác bấm nút ON/OFF màu đỏ để bật tắt, nút mũi tên lên xuống để tăng giảm nhiệt độ ạ!',
+      how_to_use: 'Bác bấm nút ON/OFF màu đỏ để bật tắt, nút mũi tên lên xuống để tăng giảm nhiệt độ ạ!',
+      safety_alert: '',
+      speech_script: 'Dạ thưa Bác! Đây là chiếc điều khiển điều hòa trong phòng. Bác bấm nút màu đỏ để bật tắt máy và bấm nút mũi tên để điều chỉnh nhiệt độ mát mẻ ạ.'
+    }
+  },
+  {
     id: 'eugica-box-front',
     name: 'Hộp Thuốc Eugica (Mặt Trước)',
     category: 'Mặt Trước Hộp - Thiếu HSD',

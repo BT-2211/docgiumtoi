@@ -130,8 +130,15 @@ export default function App() {
     saveRecordToHistory(result, imagePreview);
   };
 
-  const handleScanAnother = () => {
+  const handleScanAnother = (options?: { isFlipSecondSide?: boolean }) => {
     speechService.stop();
+    if (!options?.isFlipSecondSide) {
+      try {
+        sessionStorage.removeItem('docgiumtoi_multi_side_session');
+      } catch (e) {
+        // ignore
+      }
+    }
     setCurrentResult(null);
     setCurrentImagePreview(undefined);
     setActiveTab('camera');

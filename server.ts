@@ -169,8 +169,8 @@ YÊU CẦU XỬ LÝ THEO TỪNG LOẠI ĐỒ VẬT VÀ TÌNH HUỐNG:
 
 1. TỰ ĐỘNG NHẬN DIỆN NHÓM ĐỒ VẬT (item_type):
    - "MEDICINE": Thuốc tây, thuốc đông y, thực phẩm chức năng, vỉ thuốc, chai siro, cao dán, vật tư y tế.
-   - "CONSUMER_GOODS": Thực phẩm, bánh kẹo, đồ hộp, chai nước, sữa, gia vị, dầu ăn, dầu gội, mỹ phẩm, xà phòng, hàng tiêu dùng.
-   - "PERSONAL_ITEM": Ví tiền, điện thoại, chùm chìa khóa, mắt kính, thẻ căn cước, thẻ ATM, đồng hồ, túi xách, đồ dùng cá nhân.
+   - "CONSUMER_GOODS": Thực phẩm, bánh kẹo, đồ hộp, chai nước, sữa, gia vị, dầu ăn, dầu gội, mỹ phẩm, xà phòng, hàng tiêu dùng (những đồ có hạn sử dụng).
+   - "PERSONAL_ITEM": Đồ gia dụng trong nhà (nồi cơm, ấm đun, quạt điện, tivi, điều khiển, bàn ủi, chén đĩa...), đồ dùng cá nhân (ví tiền, điện thoại, chùm chìa khóa, mắt kính, thẻ căn cước, thẻ ATM, đồng hồ, túi xách, quần áo, dụng cụ...).
    - "UNKNOWN": Ảnh không rõ ràng, chụp vào khoảng trống, hoặc không nhận diện được vật thể nào.
 
 2. XỬ LÝ LƯỢT CHỤP MẶT 2 & KIỂM TRA CHỤP NHẦM ĐỒ (CROSS-PRODUCT VALIDATION):
@@ -187,14 +187,21 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
 
 3. XỬ LÝ 2 KỊCH BẢN ĐẶC BIỆT KHÔNG THẤY HẠN SỬ DỤNG (EXPIRY EDGE-CASES):
 
-   * KỊCH BẢN 1: CHỤP MẶT TRƯỚC HỘP (THIẾU HSD TRÊN MẶT NÀY)
-     - Điều kiện: Nhận diện được tên sản phẩm/thuốc/hàng tiêu dùng nhưng KHÔNG tìm thấy ký tự HSD/EXP/MFG/NSX trên mặt ảnh này.
+   * QUY TẮC QUAN TRỌNG VỀ ĐỒ GIA DỤNG / ĐỒ CÁ NHÂN (PERSONAL_ITEM):
+     - Đồ gia dụng, vật dụng sinh hoạt, đồ cá nhân KHÔNG CÓ HẠN SỬ DỤNG.
+     - TUYỆT ĐỐI KHÔNG ĐƯỢC GÁN "need_second_side" cho đồ gia dụng hoặc đồ cá nhân!
+     - Khi chụp đồ gia dụng/cá nhân: Luôn gán "status": "success", "item_type": "PERSONAL_ITEM", "expiry_date": "Không áp dụng", "is_expired": false.
+     - Speech_text chỉ đọc tên và công dụng, KHÔNG BAO GIỜ bảo lật hộp tìm hạn sử dụng.
+
+   * KỊCH BẢN 1: CHỤP MẶT TRƯỚC HỘP THUỐC / ĐỒ ĂN (CHỈ ÁP DỤNG CHO MEDICINE & CONSUMER_GOODS)
+     - Điều kiện: Nhận diện được tên thuốc hoặc thực phẩm/đồ ăn nhưng KHÔNG tìm thấy ký tự HSD/EXP/MFG/NSX trên mặt ảnh này.
      - Action:
        + Gán "status": "need_second_side"
        + Gán "item_name": "[Tên sản phẩm/thuốc nhận diện được]"
        + "expiry_date": "Cần lật mặt sau/đáy"
        + "is_expired": false
-       + "speech_text": "Cháu thấy [Tên sản phẩm] rồi ạ! Nhưng mặt này chưa thấy hạn sử dụng. Bác lật mặt sau hoặc mặt đáy của hộp rồi bấm chụp lại giúp cháu ạ!"
+       + BẮT BUỘC ĐỌC CÔNG DỤNG & CÁCH DÙNG trong usage_summary và usage_instructions! KHÔNG BỎ QUA hướng dẫn dùng thuốc/sản phẩm chỉ vì chưa thấy HSD.
+       + "speech_text": "Dạ đây là [Tên sản phẩm]. [Công dụng ngắn gọn và liều dùng tóm tắt]. Chưa thấy hạn sử dụng trên mặt này, Bác có thể lật đáy hoặc nắp hộp để kiểm tra thêm nếu cần ạ."
 
    * KỊCH BẢN 2: CHỤP GÓI BÁNH NHỎ / VỈ THUỐC BÓC LẺ (INDIVIDUAL PACK) & QUY TẮC CẢNH BÁO AN TOÀN:
      - Gán "status": "individual_pack"
@@ -234,6 +241,7 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
 
 7. FORMAT ĐỌC THẠO MỒNG MỘT (speech_text):
    - Lời thoại phải NGẮN GỌN (dưới 45 từ), lễ phép (dùng "Bác", "Cháu"), đọc chậm rãi.
+   - QUY TẮC ĐỌC TỪ VIẾT TẮT HSD & NSX: Trong speech_text, TUYỆT ĐỐI KHÔNG đọc chữ viết tắt như "HSD", "NSX", "EXP", "MFG" mà BẮT BUỘC đọc đầy đủ rõ ràng thành "hạn sử dụng" (cho HSD/EXP) và "ngày sản xuất" (cho NSX/MFG).
    - QUY TẮC NGÔN TỪ: Tuyệt đối KHÔNG dùng "nhé ạ" hay "nhé", cuối câu luôn dùng từ "ạ" (hoặc "ạ!").
    - Phiên âm tên tiếng Anh khó đọc sang cách đọc tiếng Việt dễ hiểu.
 `;
@@ -393,22 +401,22 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
             model: modelName,
             contents: { parts: contents },
             config: {
-              systemInstruction: `Bạn là Trợ lý AI đọc chữ dành cho người cao tuổi và người mắt kém tại Việt Nam. Nhiệm vụ của bạn là phân tích hình ảnh và trả về JSON thuần theo đúng schema được yêu cầu.
+              systemInstruction: `Bạn là Trợ lý AI đọc chữ và hướng dẫn sử dụng sản phẩm dành cho người cao tuổi và người mắt kém tại Việt Nam.
 
-QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TRỌNG):
-1. KHÔNG ĐƯỢC TỰ SUY ĐOÁN: Nếu chỉ thấy một dãy số/ngày tháng (ví dụ: "14.05.26", "14.05.26 B1") mà KHÔNG CÓ chữ nhãn đi kèm (như HSD, EXP, Best Before, NSX, MFG):
-   - TUYỆT ĐỐI KHÔNG được khẳng định đó là "Hạn sử dụng" hay "Ngày sản xuất".
-   - Bắt buộc trả về status: "unclear" (hoặc "warning" tùy schema của bạn).
-   - Trong phần lời nói/thông báo cho người dùng, hãy nói rõ: "Tìm thấy dãy số 14.05.26 nhưng không có chữ HSD hay NSX. Vui lòng xoay gói bánh tìm chữ HSD hoặc đưa mặt trước lên."
+QUY TẮC TỐI CAO NẾU NHÌN THẤY THÔNG TIN (PRIORITY RULE):
+1. NHÌN THẤY CÁI GÌ - BÁO CÁI ĐÓ: 
+   - Nếu nhìn thấy bất kỳ chữ hoặc ký hiệu NSX, HSD, EXP, MFG, Best Before (hoặc ngày tháng đi kèm): BẮT BỘC phải đọc và trả về ngày đó ngay lập tức!
+   - TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ SUY ĐOÁN rằng "hộp nhỏ", "gói nhỏ", "gói lẻ" thì không có HSD/NSX. Nếu ảnh đã chụp rõ NSX/HSD thì PHẢI XÁC NHẬN LÀ CÓ.
 
-2. CHỈ XÁC NHẬN HSD KHI:
-   - Thấy rõ các chữ: "HSD", "Hạn sử dụng", "EXP", "EXPIRY", "Best Before", "Use By" ngay cạnh hoặc ngay phía trên/dưới dãy số.
+2. ĐỌC THÔNG TIN TÊN SẢN PHẨM & CÁCH DÙNG:
+   - Nhận diện tên sản phẩm (Ví dụ: Thuốc, bánh, thực phẩm chức năng...).
+   - Đưa ra Tên + Công dụng ngắn gọn + Liều dùng/Cách dùng (nếu có trên bao bì hoặc thông tin chuẩn của loại thuốc/thực phẩm đó).
+   - Luôn trả về thông tin tên và cách dùng này cho bác lớn tuổi.
 
-3. CHỈ XÁC NHẬN NSX KHI:
-   - Thấy rõ các chữ: "NSX", "Ngày sản xuất", "MFG", "PROD" ngay cạnh hoặc ngay phía trên/dưới dãy số.
+3. KHI NÀO MỚI BÁO CHƯA THẤY:
+   - CHỈ KHI NÀO mặt ảnh hoàn toàn KHÔNG CÓ dòng chữ NSX/HSD/EXP nào thì mới báo: "Chưa thấy hạn sử dụng trên mặt này, Bác lật sang mặt khác xem sao nhé."
 
-4. NẾU ẢNH BỊ MỜ / THIẾU TÊN SẢN PHẨM:
-   - Nếu chỉ quay mặt hông/gói lẻ không có tên thương hiệu, hãy nhắc người dùng đưa mặt chính của sản phẩm vào khung hình.`,
+Trả về JSON thuần theo đúng schema đã khai báo.`,
               responseMimeType: "application/json",
               responseSchema: responseSchemaConfig,
               temperature: 0,
@@ -420,11 +428,21 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
             const rawJson = JSON.parse(resultText);
 
             // Normalize & populate complete structure
-            const status = rawJson.status || "success";
             let rawType = (rawJson.item_type || "").toUpperCase();
             if (rawType.includes("MEDICINE") || rawType.includes("THUỐC")) {
               rawType = "MEDICINE";
-            } else if (rawType.includes("PERSONAL") || rawType.includes("VÍ") || rawType.includes("ĐIỆN THOẠI") || rawType.includes("CHÌA KHÓA")) {
+            } else if (
+              rawType.includes("PERSONAL") ||
+              rawType.includes("HOUSEHOLD") ||
+              rawType.includes("GIA DỤNG") ||
+              rawType.includes("VÍ") ||
+              rawType.includes("ĐIỆN THOẠI") ||
+              rawType.includes("CHÌA KHÓA") ||
+              rawType.includes("KÍNH") ||
+              rawType.includes("ĐIỀU KHIỂN") ||
+              rawType.includes("QUẠT") ||
+              rawType.includes("NỒI")
+            ) {
               rawType = "PERSONAL_ITEM";
             } else if (rawType.includes("CONSUMER") || rawType.includes("FOOD")) {
               rawType = "CONSUMER_GOODS";
@@ -434,11 +452,18 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
               rawType = "CONSUMER_GOODS";
             }
 
+            let status = rawJson.status || "success";
             const itemType = rawType;
-            const itemName = rawJson.item_name || (previousItemName || "Sản phẩm");
             const isPersonalItem = itemType === "PERSONAL_ITEM";
-            const isNeedSecondSide = status === "need_second_side";
-            const isIndividualPack = status === "individual_pack";
+
+            // Đồ gia dụng và đồ cá nhân KHÔNG CÓ HSD -> Tuyệt đối không để need_second_side
+            if (isPersonalItem && status === "need_second_side") {
+              status = "success";
+            }
+
+            const itemName = rawJson.item_name || (previousItemName || "Sản phẩm");
+            const isNeedSecondSide = status === "need_second_side" && !isPersonalItem;
+            let isIndividualPack = status === "individual_pack";
             const isCrossMismatch = status === "cross_product_mismatch";
 
             const textInPhun1 = (rawJson.Text_In_Phun_1 || rawJson.raw_text_inkjet || "").trim();
@@ -513,6 +538,12 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
               isCalculated = false;
             }
 
+            // PRIORITY RULE: Nếu nhìn thấy HSD/NSX trên ảnh thì BẮT BUỘC xác nhận có HSD, không suy đoán gói nhỏ không có
+            if (isIndividualPack && rawExpiryDate && /\d{1,2}[\/\-\.]\d{2,4}/.test(rawExpiryDate)) {
+              isIndividualPack = false;
+              status = "success";
+            }
+
             const expiryDate = isPersonalItem
               ? "Không áp dụng"
               : isNeedSecondSide
@@ -550,7 +581,7 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
               defaultUsageInstructions = "Bảo quản nơi khô ráo thoáng mát và sử dụng theo hướng dẫn ạ.";
             }
 
-            let usageInstructions = rawJson.usage_instructions || (status === "success" || isIndividualPack ? defaultUsageInstructions : "");
+            let usageInstructions = rawJson.usage_instructions || (status === "success" || isIndividualPack || isNeedSecondSide ? defaultUsageInstructions : "");
             
             // Clean up any unwanted 'nhé ạ' phrases to 'ạ'
             usageInstructions = usageInstructions.replace(/nhé\s+ạ/gi, "ạ").replace(/nhé\s+bác/gi, "Bác ạ");
@@ -579,12 +610,13 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
                 speechText = `Dạ cháu chỉ thấy ngày sản xuất là ${rawDetectedMfg} chứ chưa thấy thông tin hạn sử dụng. Bác lật mặt khác bấm chụp lại hoặc nhờ con cháu kiểm tra giúp ạ!`;
               }
             } else if (isUnclearStandaloneNumber && (!speechText || status === "unclear")) {
-              speechText = `Dạ cháu tìm thấy dãy số ${textInPhun1} nhưng không có chữ HSD hay NSX. Bác vui lòng xoay gói bánh tìm chữ HSD hoặc đưa mặt trước lên giúp cháu ạ.`;
+              speechText = `Dạ cháu tìm thấy dãy số ${textInPhun1} nhưng không có thông tin hạn sử dụng hay ngày sản xuất. Bác vui lòng xoay gói bánh tìm chữ hạn sử dụng hoặc đưa mặt trước lên giúp cháu ạ.`;
             } else if (!speechText) {
               if (isCrossMismatch) {
                 speechText = `Hình như Bác đang chụp một sản phẩm khác rồi ạ. Bác kiểm tra lại đúng ${previousItemName || 'hộp sản phẩm'} lúc nãy để cháu đọc lại ạ!`;
               } else if (isNeedSecondSide) {
-                speechText = `Cháu thấy ${itemName} rồi ạ! Nhưng mặt này chưa thấy hạn sử dụng. Bác lật mặt sau hoặc mặt đáy của hộp rồi bấm chụp lại giúp cháu ạ!`;
+                const usagePart = rawJson.usage_summary || rawJson.usage_instructions ? ` ${rawJson.usage_summary || rawJson.usage_instructions}` : "";
+                speechText = `Dạ đây là ${itemName}.${usagePart} Chưa thấy hạn sử dụng trên mặt này, Bác có thể lật đáy hoặc nắp hộp để kiểm tra thêm nếu cần ạ.`;
               } else if (isIndividualPack) {
                 if (itemType === "MEDICINE") {
                   speechText = "Bác ơi, đây là vỉ thuốc xé lẻ không có thông tin hạn sử dụng. Để đảm bảo an toàn tuyệt đối cho sức khỏe, nếu Bác không nhớ rõ ngày mua, Bác tuyệt đối KHÔNG NÊN UỐNG liều thuốc này ạ!";
@@ -608,7 +640,13 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
               }
             }
 
-            speechText = speechText.replace(/nhé\s+ạ/gi, "ạ").replace(/nhé\s+bác/gi, "Bác ạ");
+            speechText = speechText
+              .replace(/\bHSD\b/g, "hạn sử dụng")
+              .replace(/\bEXP\b/g, "hạn sử dụng")
+              .replace(/\bNSX\b/g, "ngày sản xuất")
+              .replace(/\bMFG\b/g, "ngày sản xuất")
+              .replace(/nhé\s+ạ/gi, "ạ")
+              .replace(/nhé\s+bác/gi, "Bác ạ");
 
             const expiryStatus = isPersonalItem
               ? "NOT_APPLICABLE"

@@ -59,6 +59,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const [countdownSeconds, setCountdownSeconds] = useState<number>(MULTI_SIDE_TIMEOUT_SECONDS);
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
 
+  // Flash shutter visual state & capture flash state
+  const [isFlashingShutter, setIsFlashingShutter] = useState<boolean>(false);
+
   // Smart Auto-Flash state
   const [autoFlashNotice, setAutoFlashNotice] = useState<boolean>(false);
   const manualTorchOverrideRef = useRef<boolean>(false);
@@ -66,6 +69,21 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+  const isActiveRef = useRef<boolean>(isActive);
+  const cameraSessionIdRef = useRef<number>(0);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      stopCamera();
+    };
+  }, []);
 
   // Initialize and check multi-side session on mount and reload
   useEffect(() => {
@@ -158,12 +176,17 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const triggerAutoFlash = async () => {
     if (streamRef.current && hasTorch) {
       const track = streamRef.current.getVideoTracks()[0];
-      try {
-        await (track as any).applyConstraints({
-          advanced: [{ torch: true }],
-        });
-      } catch (e) {
-        console.warn('Auto torch apply failed:', e);
+      if (track) {
+        try {
+          const capabilities = (track.getCapabilities?.() as any) || {};
+          if (capabilities.torch && typeof (track as any).applyConstraints === 'function') {
+            await (track as any).applyConstraints({
+              advanced: [{ torch: true }],
+            }).catch(() => {});
+          }
+        } catch (e) {
+          console.warn('Auto torch apply failed:', e);
+        }
       }
     }
     setTorchOn(true);
@@ -176,35 +199,135 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     }, 4500);
   };
 
+  const releaseMediaStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          if (track && typeof track.getCapabilities === 'function') {
+            const capabilities = (track.getCapabilities() as any) || {};
+            if (capabilities.torch && typeof (track as any).applyConstraints === 'function') {
+              (track as any).applyConstraints({
+                advanced: [{ torch: false }],
+              }).catch(() => {});
+            }
+          }
+        } catch {}
+        try {
+          track.stop();
+        } catch {}
+      });
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+      } catch {}
+    }
+    setTorchOn(false);
+    setAutoFlashNotice(false);
+  };
+
+  const stopCamera = () => {
+    cameraSessionIdRef.current++; // Invalidate pending startCamera promises
+    releaseMediaStream();
+    setCameraActive(false);
+  };
+
   // Initialize camera stream
   const startCamera = async () => {
-    try {
-      stopCamera();
-      setCameraPermissionDenied(false);
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      };
+    // Release any old stream without invalidating the new session
+    releaseMediaStream();
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const currentSession = ++cameraSessionIdRef.current;
+
+    if (!isActiveRef.current || !isMountedRef.current) {
+      return;
+    }
+
+    try {
+      setCameraPermissionDenied(false);
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraActive(false);
+        return;
+      }
+
+      let stream: MediaStream | null = null;
+      try {
+        const constraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (constraintErr: any) {
+        console.warn('Primary camera constraints failed, attempting fallback:', constraintErr);
+        // Fallback with relaxed constraint
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facingMode },
+            audio: false,
+          });
+        } catch {
+          // Final fallback with bare video
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
+      }
+
+      if (!stream) {
+        setCameraActive(false);
+        return;
+      }
+
+      // Critical check: if user navigated away or unmounted while waiting for camera access
+      if (!isMountedRef.current || !isActiveRef.current || currentSession !== cameraSessionIdRef.current) {
+        stream.getTracks().forEach((track) => {
+          try {
+            const capabilities = (track.getCapabilities?.() as any) || {};
+            if (capabilities.torch && typeof (track as any).applyConstraints === 'function') {
+              (track as any).applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+            }
+          } catch {}
+          try {
+            track.stop();
+          } catch {}
+        });
+        return;
+      }
+
       streamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Video play error:', playErr);
+        }
       }
 
       setCameraActive(true);
       setCameraPermissionDenied(false);
 
-      // Check for torch capability
+      // Check for torch capability safely
       const track = stream.getVideoTracks()[0];
-      const capabilities = (track.getCapabilities?.() as any) || {};
-      setHasTorch(!!capabilities.torch);
+      if (track && typeof track.getCapabilities === 'function') {
+        try {
+          const capabilities = (track.getCapabilities() as any) || {};
+          setHasTorch(Boolean(capabilities.torch));
+        } catch {
+          setHasTorch(false);
+        }
+      } else {
+        setHasTorch(false);
+      }
     } catch (err: any) {
       console.warn('Cannot open live camera:', err);
       setCameraActive(false);
@@ -212,29 +335,6 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         setCameraPermissionDenied(true);
       }
     }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        try {
-          // Explicitly turn off hardware flashlight before closing track to avoid lingering LED on mobile
-          (track as any).applyConstraints?.({
-            advanced: [{ torch: false }],
-          });
-        } catch {
-          // ignore
-        }
-        track.stop();
-      });
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
-    setTorchOn(false);
-    setAutoFlashNotice(false);
   };
 
   useEffect(() => {
@@ -274,12 +374,17 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
     if (streamRef.current && hasTorch) {
       const track = streamRef.current.getVideoTracks()[0];
-      try {
-        await (track as any).applyConstraints({
-          advanced: [{ torch: nextState }],
-        });
-      } catch (e) {
-        console.warn('Torch toggle failed:', e);
+      if (track && typeof (track as any).applyConstraints === 'function') {
+        try {
+          const capabilities = (track.getCapabilities?.() as any) || {};
+          if (capabilities.torch) {
+            await (track as any).applyConstraints({
+              advanced: [{ torch: nextState }],
+            }).catch(() => {});
+          }
+        } catch (e) {
+          console.warn('Torch toggle failed:', e);
+        }
       }
     }
     setTorchOn(nextState);
@@ -393,10 +498,8 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     }
   };
 
-  // Capture current camera frame with Canvas compression (max 1024px, JPEG 0.8)
+  // Capture current camera frame with simultaneous flash activation and post-capture shutoff
   const capturePhoto = async () => {
-    if (settings.soundFeedback) speechService.playFeedbackSound('camera');
-
     if (!videoRef.current || !cameraActive) {
       if (fileInputRef.current) {
         fileInputRef.current.click();
@@ -404,10 +507,35 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       return;
     }
 
+    if (settings.soundFeedback) speechService.playFeedbackSound('camera');
+
+    // Trigger visual screen shutter flash
+    setIsFlashingShutter(true);
+    setTimeout(() => setIsFlashingShutter(false), 300);
+
+    const track = streamRef.current?.getVideoTracks()[0];
+    let temporaryTorchActivated = false;
+
+    // Turn ON flash simultaneously when clicking capture to illuminate the object and avoid blurry images
+    if (track && !torchOn) {
+      try {
+        const capabilities = (track.getCapabilities?.() as any) || {};
+        if (capabilities.torch && typeof (track as any).applyConstraints === 'function') {
+          await (track as any).applyConstraints({
+            advanced: [{ torch: true }],
+          }).catch(() => {});
+          temporaryTorchActivated = true;
+          // Brief 180ms delay for camera sensor exposure and focus to adapt to bright flash light
+          await new Promise((resolve) => setTimeout(resolve, 180));
+        }
+      } catch (err) {
+        console.warn('Capture flash activation error:', err);
+      }
+    }
+
+    let compressedDataUrl: string | null = null;
     try {
-      const compressedDataUrl = await compressImage(videoRef.current, 1024, 0.8);
-      setCapturedImage(compressedDataUrl);
-      processImagePayload(compressedDataUrl);
+      compressedDataUrl = await compressImage(videoRef.current, 1024, 0.85);
     } catch (err) {
       console.warn('Capture/compression fallback:', err);
       const video = videoRef.current;
@@ -417,10 +545,26 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setCapturedImage(dataUrl);
-        processImagePayload(dataUrl);
+        compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
       }
+    }
+
+    // Turn OFF flash immediately after the photo frame has been captured
+    if (temporaryTorchActivated && track) {
+      try {
+        if (typeof (track as any).applyConstraints === 'function') {
+          await (track as any).applyConstraints({
+            advanced: [{ torch: false }],
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('Capture flash deactivation error:', err);
+      }
+    }
+
+    if (compressedDataUrl) {
+      setCapturedImage(compressedDataUrl);
+      processImagePayload(compressedDataUrl);
     }
   };
 
@@ -563,10 +707,20 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           playsInline
           muted
           autoPlay
-          className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'} ${
+          className={`w-full h-full object-cover transition-transform duration-300 ${cameraActive ? 'block' : 'hidden'} ${
+            facingMode === 'user' ? '-scale-x-100' : 'scale-x-100'
+          } ${
             torchOn ? 'brightness-110 contrast-105' : ''
           }`}
         />
+
+        {/* Visual Camera Shutter Flash Overlay */}
+        {isFlashingShutter && (
+          <div
+            id="shutter-flash-overlay"
+            className="absolute inset-0 bg-white z-30 pointer-events-none transition-opacity duration-300 opacity-90"
+          />
+        )}
 
         {/* Minimalist Top Notification Pill Badge */}
         <div className="absolute top-4 inset-x-0 flex justify-center pointer-events-none z-20 px-16 sm:px-20">
@@ -580,14 +734,14 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
               <>
                 <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 shrink-0" strokeWidth={2.75} />
                 <span className="text-xs sm:text-base font-black tracking-wide uppercase text-white truncate">
-                  📸 LẬT MẶT SAU / ĐÁY SOI HSD
+                  LẬT MẶT SAU / ĐÁY SOI HSD
                 </span>
               </>
             ) : (
               <>
                 <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-[#E65F2B] shrink-0" strokeWidth={2.75} />
                 <span className="text-xs sm:text-base font-black tracking-wide uppercase text-white truncate">
-                  📸 ĐẶT VẬT DỤNG VÀO KHUNG HÌNH
+                  ĐẶT VẬT DỤNG VÀO KHUNG HÌNH
                 </span>
               </>
             )}
@@ -718,12 +872,12 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           )}
         </div>
         <span className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-center px-4 leading-none text-white">
-          {multiSideSession ? 'CHỤP MẶT SAU / MẶT ĐÁY' : 'CHỤP HÌNH NHÃN SẢN PHẨM'}
+          {multiSideSession ? 'CHỤP MẶT SAU / MẶT ĐÁY' : 'ẤN ĐỂ CHỤP'}
         </span>
         <span className="text-xs sm:text-sm font-bold text-white/90 uppercase tracking-wider">
           {multiSideSession
             ? `(Đối chiếu với ${multiSideSession.item_name} & Đọc HSD)`
-            : '(Bấm vào đây để AI đọc tên & Hạn Sử Dụng ngay)'}
+            : '(Bấm vào đây để AI đọc thông tin & Hạn Sử Dụng ngay)'}
         </span>
       </button>
 

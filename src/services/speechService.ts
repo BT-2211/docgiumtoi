@@ -45,14 +45,40 @@ class SpeechService {
     );
   }
 
+  public normalizeTextForSpeech(text: string): string {
+    if (!text) return '';
+    let clean = text;
+
+    // 1. Chuẩn hóa các từ viết tắt HSD, NSX, EXP, MFG, HDSD thành câu chữ tự nhiên đầy đủ
+    clean = clean
+      // HSD / EXP -> hạn sử dụng
+      .replace(/\bHSD\b/gi, 'hạn sử dụng')
+      .replace(/\bEXP\b/gi, 'hạn sử dụng')
+      .replace(/\bBest\s*Before\b/gi, 'hạn sử dụng tốt nhất trước')
+      .replace(/\bUse\s*By\b/gi, 'hạn sử dụng đến')
+      // NSX / MFG -> ngày sản xuất
+      .replace(/\bNSX\b/gi, 'ngày sản xuất')
+      .replace(/\bMFG\b/gi, 'ngày sản xuất')
+      .replace(/\bPROD\b/gi, 'ngày sản xuất')
+      // HDSD -> hướng dẫn sử dụng
+      .replace(/\bHDSD\b/gi, 'hướng dẫn sử dụng')
+      .replace(/\bKLT\b/gi, 'khối lượng tịnh')
+      // Chuẩn hóa định dạng ngày tháng như 25/12/2026 hay 12/2026 để đọc mượt mà
+      .replace(/(\d{1,2})\/(\d{1,2})\/(\d{4})/g, 'ngày $1 tháng $2 năm $3')
+      .replace(/(\d{1,2})\/(\d{4})/g, 'tháng $1 năm $2')
+      // Chuẩn hóa từ đệm lịch sự
+      .replace(/nhé\s+ạ/gi, 'ạ')
+      .replace(/nhé\s+Bác/gi, 'Bác ạ')
+      .replace(/Bác\s+nhé/gi, 'Bác ạ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return clean;
+  }
+
   private splitIntoSentences(text: string): string[] {
     if (!text) return [];
-    let clean = text
-      .replace(/\s+/g, ' ')
-      .replace(/nhé\s+ạ/gi, 'ạ')
-      .replace(/nhé\s+Bác/gi, 'ạ')
-      .replace(/Bác\s+nhé/gi, 'ạ')
-      .trim();
+    let clean = this.normalizeTextForSpeech(text);
     const parts = clean.split(/(?<=[.!?:\n])\s+/);
     const result: string[] = [];
 

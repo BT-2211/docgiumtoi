@@ -18,6 +18,8 @@ import {
   BookOpen,
   FileText,
   Volume2,
+  Home,
+  RefreshCw,
 } from 'lucide-react';
 import { MedicineAnalysisResult, SeniorSettings } from '../types';
 import { speechService } from '../services/speechService';
@@ -26,7 +28,7 @@ interface MedicineResultViewProps {
   result: MedicineAnalysisResult;
   imagePreview?: string;
   settings: SeniorSettings;
-  onScanAnother: () => void;
+  onScanAnother: (options?: { isFlipSecondSide?: boolean }) => void;
 }
 
 export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
@@ -118,18 +120,29 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
     speechService.speak(text, settings.speechRate);
   };
 
-  const isSuccess = !result.status || result.status === 'success';
-  const isNeedSecondSide = result.status === 'need_second_side';
+  const rawType = (result.item_type || result.item_category || '').toUpperCase();
+  const isMedicine = rawType.includes('MEDICINE') || rawType.includes('THUỐC');
+  const isPersonalItem =
+    rawType.includes('PERSONAL') ||
+    rawType.includes('HOUSEHOLD') ||
+    rawType.includes('GIA DỤNG') ||
+    rawType.includes('VÍ') ||
+    rawType.includes('ĐIỆN THOẠI') ||
+    rawType.includes('CHÌA KHÓA') ||
+    rawType.includes('KÍNH') ||
+    rawType.includes('ĐIỀU KHIỂN') ||
+    rawType.includes('QUẠT') ||
+    rawType.includes('NỒI');
+  const isConsumerGoods = !isMedicine && !isPersonalItem;
+
+  // LẬT HỘP CHỈ ÁP DỤNG CHO ĐỒ Y TẾ / THUỐC HOẶC ĐỒ ĂN / HÀNG TIÊU DÙNG (KHÔNG ÁP DỤNG CHO ĐỒ GIA DỤNG / ĐỒ CÁ NHÂN)
+  const isNeedSecondSide = result.status === 'need_second_side' && !isPersonalItem && (isMedicine || isConsumerGoods);
+  const isSuccess = (!result.status || result.status === 'success' || (result.status === 'need_second_side' && isPersonalItem));
   const isIndividualPack = result.status === 'individual_pack';
   const isCrossMismatch = result.status === 'cross_product_mismatch' || result.is_cross_mismatch;
   const isUnclear = result.status === 'unclear';
   const isNotFound = result.status === 'not_found';
   const isUnclearOrNotFound = isUnclear || isNotFound;
-
-  const rawType = (result.item_type || result.item_category || '').toUpperCase();
-  const isMedicine = rawType.includes('MEDICINE') || rawType.includes('THUỐC');
-  const isPersonalItem = rawType.includes('PERSONAL') || rawType.includes('VÍ') || rawType.includes('ĐIỆN THOẠI') || rawType.includes('CHÌA KHÓA') || rawType.includes('KÍNH');
-  const isConsumerGoods = !isMedicine && !isPersonalItem;
 
   const isExpired = Boolean(result.is_expired || result.expiration_info?.status === 'EXPIRED');
   const isValid = !isExpired && result.expiration_info?.status === 'VALID';
@@ -523,9 +536,9 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             </>
           ) : isPersonalItem ? (
             <>
-              <BookmarkCheck className="w-5 h-5 text-amber-600" strokeWidth={2.75} />
+              <Home className="w-5 h-5 text-amber-600" strokeWidth={2.75} />
               <span className="text-sm sm:text-base font-black uppercase tracking-wider text-amber-800">
-                👛 ĐỒ DÙNG CÁ NHÂN
+                🏠 ĐỒ GIA DỤNG / CÁ NHÂN
               </span>
             </>
           ) : (
@@ -691,24 +704,78 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         </div>
       </div>
 
-      {/* 7. ACTION: SCAN ANOTHER ITEM */}
-      <div className="pt-2">
-        <button
-          id="btn-scan-another"
-          onClick={onScanAnother}
-          className="w-full min-h-[76px] bg-[#E65F2B] text-white font-black text-2xl px-6 py-4 rounded-[28px] flex items-center justify-center gap-3 hover:bg-[#d85320] active:scale-95 transition-all shadow-lg shadow-orange-500/20 uppercase tracking-tight cursor-pointer"
-        >
-          <Camera className="w-8 h-8 text-white" strokeWidth={2.75} />
-          <span>
-            {isNeedSecondSide
-              ? '📸 LẬT HỘP & CHỤP MẶT SAU'
-              : isIndividualPack
-              ? '📸 CHỤP VỎ HỘP LỚN / ĐỒ KHÁC'
-              : isSuccess
-              ? 'CHỤP HOẶC TRA CỨU ĐỒ KHÁC'
-              : 'CHỤP LẠI ẢNH RÕ HƠN'}
-          </span>
-        </button>
+      {/* 7. ACTION: SCAN NEXT ITEM & CONTEXTUAL BUTTONS */}
+      <div className="pt-2 flex flex-col gap-3">
+        {isNeedSecondSide ? (
+          <>
+            {/* Primary Option: Flip current medicine/food box */}
+            <button
+              id="btn-scan-flip-side"
+              onClick={() => onScanAnother({ isFlipSecondSide: true })}
+              className="w-full min-h-[76px] bg-[#2B67E6] text-white font-black text-xl sm:text-2xl px-6 py-4 rounded-[28px] flex flex-col items-center justify-center gap-1 hover:bg-[#2053c2] active:scale-95 transition-all shadow-lg shadow-blue-500/25 uppercase tracking-tight cursor-pointer"
+            >
+              <div className="flex items-center justify-center gap-3">
+                <RefreshCw className="w-7 h-7 text-white" strokeWidth={2.75} />
+                <span>📸 LẬT HỘP & CHỤP MẶT SAU (TÌM HSD)</span>
+              </div>
+              <span className="text-sm font-semibold text-blue-100 normal-case tracking-normal">
+                (Giữ nguyên sản phẩm này để đối chiếu tìm ngày hết hạn)
+              </span>
+            </button>
+
+            {/* Always provide alternative: Scan next item directly */}
+            <button
+              id="btn-scan-next-item-alt"
+              onClick={() => onScanAnother({ isFlipSecondSide: false })}
+              className="w-full min-h-[68px] bg-[#E65F2B] text-white font-black text-xl sm:text-2xl px-6 py-4 rounded-[28px] flex flex-col items-center justify-center gap-1 hover:bg-[#d85320] active:scale-95 transition-all shadow-md shadow-orange-500/20 uppercase tracking-tight cursor-pointer"
+            >
+              <div className="flex items-center justify-center gap-3">
+                <Camera className="w-7 h-7 text-white" strokeWidth={2.75} />
+                <span>📸 CHỤP MÓN TIẾP THEO (ĐỔI ĐỒ KHÁC)</span>
+              </div>
+              <span className="text-sm font-semibold text-orange-100 normal-case tracking-normal">
+                (Bỏ qua mặt sau và chuyển sang quét đồ vật mới)
+              </span>
+            </button>
+          </>
+        ) : isCrossMismatch || isUnclearOrNotFound ? (
+          <>
+            {/* Retry Option */}
+            <button
+              id="btn-retry-scan"
+              onClick={() => onScanAnother({ isFlipSecondSide: false })}
+              className="w-full min-h-[72px] bg-[#2B67E6] text-white font-black text-xl sm:text-2xl px-6 py-4 rounded-[28px] flex items-center justify-center gap-3 hover:bg-[#2053c2] active:scale-95 transition-all shadow-md uppercase tracking-tight cursor-pointer"
+            >
+              <RefreshCw className="w-7 h-7 text-white" strokeWidth={2.75} />
+              <span>📸 CHỤP LẠI MÓN NÀY RÕ HƠN</span>
+            </button>
+
+            {/* Scan Next Option */}
+            <button
+              id="btn-scan-another-item"
+              onClick={() => onScanAnother({ isFlipSecondSide: false })}
+              className="w-full min-h-[68px] bg-[#E65F2B] text-white font-black text-xl sm:text-2xl px-6 py-4 rounded-[28px] flex items-center justify-center gap-3 hover:bg-[#d85320] active:scale-95 transition-all shadow-md shadow-orange-500/20 uppercase tracking-tight cursor-pointer"
+            >
+              <Camera className="w-7 h-7 text-white" strokeWidth={2.75} />
+              <span>📸 CHỤP MÓN TIẾP THEO (ĐỒ KHÁC)</span>
+            </button>
+          </>
+        ) : (
+          /* Standard / Success / Individual Pack / Household Item */
+          <button
+            id="btn-scan-another"
+            onClick={() => onScanAnother({ isFlipSecondSide: false })}
+            className="w-full min-h-[76px] bg-[#E65F2B] text-white font-black text-2xl px-6 py-4 rounded-[28px] flex flex-col items-center justify-center gap-1 hover:bg-[#d85320] active:scale-95 transition-all shadow-lg shadow-orange-500/20 uppercase tracking-tight cursor-pointer"
+          >
+            <div className="flex items-center justify-center gap-3">
+              <Camera className="w-8 h-8 text-white" strokeWidth={2.75} />
+              <span>📸 CHỤP MÓN TIẾP THEO</span>
+            </div>
+            <span className="text-sm font-semibold text-white/90 normal-case tracking-normal">
+              (Bấm vào đây để quét đồ vật hoặc sản phẩm tiếp theo)
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );
