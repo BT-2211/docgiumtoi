@@ -115,14 +115,85 @@ async function startServer() {
       const isSecondSideMode = Boolean(step === 2 || previousItemName);
 
       const prompt = `
-Bạn là Trợ lý AI đọc chữ dành cho người cao tuổi và người mắt kém tại Việt Nam.
+Bạn là Trợ lý AI đọc chữ và kiểm tra Hạn Sử Dụng (HSD) dành riêng cho người cao tuổi và người mắt kém tại Việt Nam.
 Nhiệm vụ của bạn là phân tích hình ảnh được chụp và trả về kết quả dạng JSON chuẩn xác 100%.
 
 THÔNG TIN THỜI GIAN HỆ THỐNG:
 - NGÀY HIỆN TẠI: ${currentDateStr} (Định dạng Quốc tế: ${currentIsoDate}).
 ${isSecondSideMode ? `- BỐI CẢNH LƯỢT CHỤP MẶT 2: Người dùng vừa chụp mặt 1 của sản phẩm: "${previousItemName || 'Sản phẩm trước'}". Lượt chụp này là để tìm Hạn Sử Dụng (HSD) và đối chiếu xác thực sản phẩm.` : ''}
 
+========================================================================
+QUY TRÌNH KIỂM TRA NHÃN CHỮ & TÍNH HSD TỪ NSX (STRICT CHAIN OF THOUGHT):
+========================================================================
+
+1. QUY TẮC KIỂM TRA NHÃN CHỮ (LABEL DETECTION):
+- Tìm tất cả chuỗi ngày tháng dạng DD/MM/YYYY, MM/DD/YYYY, YYYY/MM/DD, DD.MM.YYYY.
+- Soi KỸ các ký tự đứng TRƯỚC hoặc SAU chuỗi ngày đó:
+  + Nếu có chữ: "NSX" / "MFG" / "Ngày sản xuất" / "PROD" / "DOM" / "Production Date":
+    * ĐÂY LÀ NGÀY SẢN XUẤT ("detected_mfg_date", "mfg_date").
+    * Gán "has_mfg_label": true.
+    * TUYỆT ĐỐI CẤM KHÔNG ĐƯỢC GÁN TRỰC TIẾP VÀO "expiry_date" HOẶC ĐỌC LÀM HSD!
+  + Nếu có chữ: "HSD" / "EXP" / "BEST BEFORE" / "USE BY" / "Hạn sử dụng" / "Expiry":
+    * ĐÂY MỚI LÀ HSD DIRECT (Hạn sử dụng trực tiếp in trên bao bì).
+    * Gán "has_mfg_label": false (hoặc true nếu có thêm dòng NSX riêng).
+    * Gán "expiry_date" và "calculated_expiry_date" = ngày đó, "is_calculated": false.
+
+2. LOGIC TÍNH HẠN SỬ DỤNG TỪ NSX (Gouté Rule - BẮT BUỘC):
+- Nếu chỉ tìm thấy NSX (ví dụ: "10/01/2026") VÀ dòng chữ quy định thời hạn (ví dụ: "Hạn sử dụng: 12 tháng kể từ NSX", "12 tháng kể từ ngày sản xuất", "HSD 12 tháng"):
+  * "detected_mfg_date": "10/01/2026"
+  * "has_mfg_label": true
+  * "detected_shelf_life": "12 tháng"
+  * "shelf_life_months": 12
+  * "is_calculated": true
+  * "calculated_expiry_date": Tự động cộng [detected_mfg_date] + [12 tháng] = "10/01/2027"
+  * "expiry_date": "10/01/2027"
+  * "expiry_calculation_note": "Tính từ NSX: 10/01/2026 + 12 tháng = 10/01/2027"
+  * So sánh HSD "10/01/2027" với NGÀY HIỆN TẠI (${currentDateStr}) để gán "is_expired".
+  * TUYỆT ĐỐI KHÔNG ĐƯỢC LẤY "10/01/2026" LÀM HSD!
+
+3. LỜI THOẠI TRỢ LÝ (speech_text) & GIẢI THÍCH MINH BẠCH:
+- NẾU tính từ NSX: Phải giải thích rõ ràng ngày sản xuất và dùng tốt đến tháng/năm nào.
+- VÍ DỤ MẪU (FEW-SHOT EXAMPLES):
+  + Ví dụ 1 (Gouté Rule - NSX 10/01/2026, HSD 12 tháng):
+    {
+      "detected_mfg_date": "10/01/2026",
+      "has_mfg_label": true,
+      "detected_shelf_life": "12 tháng",
+      "shelf_life_months": 12,
+      "is_calculated": true,
+      "calculated_expiry_date": "10/01/2027",
+      "expiry_date": "10/01/2027",
+      "speech_text": "Dạ sản phẩm này sản xuất ngày 10 tháng 01 năm 2026, hạn sử dụng 12 tháng nên Bác dùng tốt đến ngày 10 tháng 01 năm 2027 ạ!"
+    }
+  + Ví dụ 2 (Có EXP in trực tiếp):
+    {
+      "detected_mfg_date": "",
+      "has_mfg_label": false,
+      "detected_shelf_life": "",
+      "shelf_life_months": 0,
+      "is_calculated": false,
+      "calculated_expiry_date": "20/12/2026",
+      "expiry_date": "20/12/2026",
+      "speech_text": "Dạ sản phẩm này có hạn sử dụng đến ngày 20 tháng 12 năm 2026 ạ!"
+    }
+  + Ví dụ 3 (Có cả NSX và HSD in riêng):
+    {
+      "detected_mfg_date": "15/08/2024",
+      "has_mfg_label": true,
+      "detected_shelf_life": "36 tháng",
+      "shelf_life_months": 36,
+      "is_calculated": false,
+      "calculated_expiry_date": "15/08/2027",
+      "expiry_date": "15/08/2027",
+      "speech_text": "Dạ sản phẩm này sản xuất ngày 15 tháng 08 năm 2024, hạn sử dụng đến ngày 15 tháng 08 năm 2027 ạ!"
+    }
+
+CẤM TIỆT:
+- KHÔNG ĐƯỢC đọc trực tiếp mfg_date (NSX) làm HSD nếu trên bao bì có chữ "NSX" hoặc "MFG"!
+
+========================================================================
 YÊU CẦU XỬ LÝ THEO TỪNG LOẠI ĐỒ VẬT VÀ TÌNH HUỐNG:
+========================================================================
 
 1. TỰ ĐỘNG NHẬN DIỆN NHÓM ĐỒ VẬT (item_type):
    - "MEDICINE": Thuốc tây, thuốc đông y, thực phẩm chức năng, vỉ thuốc, chai siro, cao dán, vật tư y tế.
@@ -139,8 +210,8 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
      + Gán "safety_alert": "Hình như Bác đang chụp một sản phẩm khác rồi ạ."
      + Gán "speech_text": "Hình như Bác đang chụp một sản phẩm khác rồi ạ. Bác kiểm tra lại đúng ${previousItemName ? previousItemName : 'sản phẩm'} lúc nãy để cháu đọc lại ạ!" (Chỉ dùng từ 'ạ', tuyệt đối KHÔNG dùng 'nhé ạ').
    - NẾU ĐÚNG LÀ MẶT SAU / MẶT ĐÁY CỦA CÙNG SẢN PHẨM:
-     + Đọc Hạn sử dụng (HSD/EXP/MFG/NSX).
-     + Nếu tìm thấy HSD: Gán "status": "success", điền đầy đủ "expiry_date", so sánh hạn với ngày hiện tại.` : `   - Nếu không trong chế độ chụp mặt 2, bỏ qua bước kiểm tra cross-product.`}
+     + Đọc Hạn sử dụng (HSD/EXP/MFG/NSX) theo đúng QUY TRÌNH 4 BƯỚC ở trên.
+     + Nếu tìm thấy HSD: Gán "status": "success", điền đầy đủ "expiry_date", "mfg_date", so sánh hạn với ngày hiện tại.` : `   - Nếu không trong chế độ chụp mặt 2, bỏ qua bước kiểm tra cross-product.`}
 
 3. XỬ LÝ 2 KỊCH BẢN ĐẶC BIỆT KHÔNG THẤY HẠN SỬ DỤNG (EXPIRY EDGE-CASES):
 
@@ -186,25 +257,17 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
        - Với Kính mắt: "Kính mắt của Bác, Bác nhớ cất vào hộp hoặc để mặt bàn quen thuộc ạ!"
        - Với Đồ cá nhân khác: "Đồ dùng cá nhân của Bác, Bác nhớ cất gọn gàng vào nơi quen thuộc để dễ lấy ạ!").
 
-5. XỬ LÝ HẠN SỬ DỤNG BÌNH THƯỜNG (EXP / MFG):
-   - Nếu là PERSONAL_ITEM: Gán "expiry_date": "Không áp dụng", "is_expired": false.
-   - Nếu là MEDICINE hoặc CONSUMER_GOODS có HSD:
-     * So sánh Hạn sử dụng (EXP) tìm thấy với NGÀY HIỆN TẠI (${currentDateStr}).
-     * Nếu HẠN SỬ DỤNG < NGÀY HIỆN TẠI: Gán "is_expired": true và tạo LỜI CẢNH BÁO BÁO ĐỘNG trong lời thoại và safety_alert.
-     * Chấp nhận tất cả định dạng ngày: DD/MM/YYYY, MM/DD/YYYY, YYYY.MM.DD, EXP0526, MFG/EXP.
-     * Nếu không tìm thấy hoặc bị mờ trên ảnh bình thường (không phải mặt trước hay gói lẻ): Gán "expiry_date": "Không tìm thấy", "is_expired": false.
-
-6. CẢNH BÁO AN TOÀN (safety_alert):
+5. CẢNH BÁO AN TOÀN (safety_alert):
    - Điền thông tin khi có cảnh báo nguy hiểm thực sự (như sản phẩm hết hạn, thuốc xé lẻ mất HSD, hoặc cảnh báo chống chỉ định).
    - Nếu sản phẩm bình thường hoặc là đồ cá nhân an toàn, để chuỗi rỗng: "".
 
-7. XỬ LÝ CÁC EDGE CASES KHÁC (Ảnh mờ, Lóa sáng, Run tay, Bấm nhầm):
+6. XỬ LÝ CÁC EDGE CASES KHÁC (Ảnh mờ, Lóa sáng, Run tay, Bấm nhầm):
    - Nếu ảnh quá lóa, bị mất nét do run tay, hoặc không thấy rõ chữ: Gán "status": "unclear", speech_text: "Bác ơi, ảnh bị lóa hoặc mờ nét rồi. Bác giữ chắc tay và chụp lại giúp cháu ạ."
    - Nếu không tìm thấy vật thể/sản phẩm: Gán "status": "not_found", "item_type": "UNKNOWN", speech_text: "Dạ thưa Bác, cháu chưa tìm thấy đồ vật trong ảnh. Bác đưa đồ vật lại gần camera và chụp lại giúp cháu ạ."
    - Nếu đọc được rõ ràng: Gán "status": "success".
 
-8. FORMAT ĐỌC THẠO MỒNG MỘT (speech_text):
-   - Lời thoại phải NGẮN GỌN (dưới 40 từ), lễ phép (dùng "Bác", "Cháu"), đọc chậm rãi.
+7. FORMAT ĐỌC THẠO MỒNG MỘT (speech_text):
+   - Lời thoại phải NGẮN GỌN (dưới 45 từ), lễ phép (dùng "Bác", "Cháu"), đọc chậm rãi.
    - QUY TẮC NGÔN TỪ: Tuyệt đối KHÔNG dùng "nhé ạ" hay "nhé", cuối câu luôn dùng từ "ạ" (hoặc "ạ!").
    - Phiên âm tên tiếng Anh khó đọc sang cách đọc tiếng Việt dễ hiểu (Ví dụ: iPhone -> Ai-phôn, Nokia -> Nô-ki-a, Paracetamol -> Pa-ra-se-ta-mol, Panadol -> Pa-na-đon, Amlodipine -> Am-lô-đi-pin, Sunsilk -> Săn-sêu).
 `;
@@ -243,9 +306,45 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
             type: Type.STRING,
             description: "Tên sản phẩm/đồ vật rõ ràng, kèm phiên âm nếu là tiếng Anh",
           },
+          detected_mfg_date: {
+            type: Type.STRING,
+            description: "Ngày sản xuất tìm thấy (NSX/MFG/PROD), ví dụ '10/01/2026', hoặc để rỗng '' nếu không có",
+          },
+          has_mfg_label: {
+            type: Type.BOOLEAN,
+            description: "true nếu trên bao bì có nhãn NSX/MFG/Ngày sản xuất/PROD, false nếu không có",
+          },
+          detected_shelf_life: {
+            type: Type.STRING,
+            description: "Dòng quy định thời hạn phát hiện trên bao bì, ví dụ '12 tháng', '24 tháng', hoặc để rỗng ''",
+          },
+          shelf_life_months: {
+            type: Type.INTEGER,
+            description: "Số tháng quy định của hạn sử dụng nếu có (ví dụ 12, 24, 36) hoặc 0 nếu không có",
+          },
+          is_calculated: {
+            type: Type.BOOLEAN,
+            description: "true nếu HSD được tính tự động từ [mfg_date] + [shelf_life], false nếu HSD in trực tiếp",
+          },
+          calculated_expiry_date: {
+            type: Type.STRING,
+            description: "Hạn sử dụng cuối cùng DD/MM/YYYY (đã cộng từ NSX nếu cần), 'Không tìm thấy' hoặc 'Không áp dụng'",
+          },
+          mfg_date: {
+            type: Type.STRING,
+            description: "Ngày sản xuất (NSX/MFG/PROD) nếu tìm thấy, ví dụ '10/01/2026', hoặc để rỗng '' nếu không có",
+          },
+          shelf_life_text: {
+            type: Type.STRING,
+            description: "Quy định thời hạn sử dụng trên bao bì nếu có, ví dụ '12 tháng kể từ NSX', '24 tháng', hoặc rỗng ''",
+          },
+          expiry_calculation_note: {
+            type: Type.STRING,
+            description: "Ghi chú phép tính HSD từ NSX nếu phải cộng tháng, ví dụ 'Tính từ NSX: 10/01/2026 + 12 tháng = 10/01/2027', hoặc rỗng ''",
+          },
           expiry_date: {
             type: Type.STRING,
-            description: "Hạn sử dụng DD/MM/YYYY, 'Không tìm thấy' hoặc 'Không áp dụng'",
+            description: "Hạn sử dụng cuối cùng DD/MM/YYYY (đã tính từ NSX nếu cần), 'Không tìm thấy' hoặc 'Không áp dụng'",
           },
           is_expired: {
             type: Type.BOOLEAN,
@@ -265,13 +364,19 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
           },
           speech_text: {
             type: Type.STRING,
-            description: "Đoạn văn hoàn chỉnh dưới 40 từ để ứng dụng đọc thành tiếng cho người già nghe, kết thúc bằng từ 'ạ'",
+            description: "Đoạn văn hoàn chỉnh dưới 45 từ để ứng dụng đọc thành tiếng cho người già nghe, giải thích rõ NSX và HSD nếu có tính toán, kết thúc bằng từ 'ạ'",
           },
         },
         required: [
           "status",
           "item_type",
           "item_name",
+          "detected_mfg_date",
+          "has_mfg_label",
+          "detected_shelf_life",
+          "shelf_life_months",
+          "is_calculated",
+          "calculated_expiry_date",
           "expiry_date",
           "is_expired",
           "usage_summary",
@@ -341,13 +446,61 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
             const isIndividualPack = status === "individual_pack";
             const isCrossMismatch = status === "cross_product_mismatch";
 
+            const rawDetectedMfg = (rawJson.detected_mfg_date || rawJson.mfg_date || "").trim();
+            const hasMfgLabel = Boolean(rawJson.has_mfg_label || (rawDetectedMfg && true));
+            const rawDetectedShelfLife = (rawJson.detected_shelf_life || rawJson.shelf_life_text || "").trim();
+            let shelfLifeMonths = typeof rawJson.shelf_life_months === "number" ? rawJson.shelf_life_months : 0;
+            let isCalculated = Boolean(rawJson.is_calculated);
+            let calculatedExpiryDate = (rawJson.calculated_expiry_date || rawJson.expiry_date || "").trim();
+            let calculationNote = (rawJson.expiry_calculation_note || "").trim();
+
+            if (shelfLifeMonths === 0 && rawDetectedShelfLife) {
+              const mMatch = rawDetectedShelfLife.match(/(\d+)\s*(tháng|thang|month|m)/i);
+              const yMatch = rawDetectedShelfLife.match(/(\d+)\s*(năm|nam|year|y)/i);
+              if (mMatch) {
+                shelfLifeMonths = parseInt(mMatch[1], 10);
+              } else if (yMatch) {
+                shelfLifeMonths = parseInt(yMatch[1], 10) * 12;
+              }
+            }
+
+            // Programmatic safety check: If NSX was recognized and shelf life was given, but expiry_date was mistakenly identical to NSX, fix it!
+            if (rawDetectedMfg && (shelfLifeMonths > 0 || rawDetectedShelfLife) && (calculatedExpiryDate === rawDetectedMfg || !calculatedExpiryDate || calculatedExpiryDate.toLowerCase().includes("không"))) {
+              let monthsToAdd = shelfLifeMonths;
+              if (monthsToAdd === 0 && rawDetectedShelfLife) {
+                const mMatch = rawDetectedShelfLife.match(/(\d+)\s*(tháng|thang|month|m)/i);
+                const yMatch = rawDetectedShelfLife.match(/(\d+)\s*(năm|nam|year|y)/i);
+                if (mMatch) monthsToAdd = parseInt(mMatch[1], 10);
+                else if (yMatch) monthsToAdd = parseInt(yMatch[1], 10) * 12;
+              }
+
+              if (monthsToAdd > 0) {
+                const dateParts = rawDetectedMfg.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+                if (dateParts) {
+                  const day = parseInt(dateParts[1], 10);
+                  const month = parseInt(dateParts[2], 10) - 1;
+                  const year = parseInt(dateParts[3], 10);
+                  const calcDate = new Date(year, month, day);
+                  calcDate.setMonth(calcDate.getMonth() + monthsToAdd);
+                  const newD = String(calcDate.getDate()).padStart(2, "0");
+                  const newM = String(calcDate.getMonth() + 1).padStart(2, "0");
+                  const newY = calcDate.getFullYear();
+                  calculatedExpiryDate = `${newD}/${newM}/${newY}`;
+                  isCalculated = true;
+                  calculationNote = `Tính từ NSX: ${rawDetectedMfg} + ${rawDetectedShelfLife || `${monthsToAdd} tháng`} = ${calculatedExpiryDate}`;
+                }
+              }
+            }
+
+            const rawExpiryDate = calculatedExpiryDate || (rawJson.expiry_date || "").trim();
+
             const expiryDate = isPersonalItem
               ? "Không áp dụng"
               : isNeedSecondSide
               ? "Cần lật mặt sau/đáy"
               : isIndividualPack
               ? (itemType === "MEDICINE" ? "Vỉ thuốc xé lẻ - Không có HSD" : "Gói bóc lẻ - Không ghi HSD")
-              : (rawJson.expiry_date || "Không tìm thấy");
+              : (rawExpiryDate || "Không tìm thấy");
 
             const isExpired = isPersonalItem || isNeedSecondSide || isIndividualPack || isCrossMismatch
               ? false
@@ -416,10 +569,19 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
               : (expiryDate && !expiryDate.toLowerCase().includes("không") && !isNeedSecondSide && !isIndividualPack && !isCrossMismatch ? "VALID" : "UNCLEAR");
 
             parsedData = {
-              // Exact requested JSON keys
+              // Exact requested strict JSON structure
               status: status,
               item_type: itemType,
               item_name: itemName,
+              detected_mfg_date: rawDetectedMfg,
+              has_mfg_label: hasMfgLabel,
+              detected_shelf_life: rawDetectedShelfLife,
+              shelf_life_months: shelfLifeMonths,
+              is_calculated: isCalculated,
+              calculated_expiry_date: calculatedExpiryDate,
+              mfg_date: rawDetectedMfg,
+              shelf_life_text: rawDetectedShelfLife,
+              expiry_calculation_note: calculationNote,
               expiry_date: expiryDate,
               is_expired: isExpired,
               usage_summary: usageSummary,
@@ -449,6 +611,9 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
                   : expiryDate && !expiryDate.toLowerCase().includes("không")
                   ? `HSD: ${expiryDate}`
                   : "Không thấy rõ HSD",
+                mfg_date_text: rawDetectedMfg ? `NSX: ${rawDetectedMfg}` : undefined,
+                shelf_life_text: rawDetectedShelfLife || undefined,
+                calculation_note: calculationNote || undefined,
                 days_remaining_text: isPersonalItem
                   ? "Đồ dùng cá nhân"
                   : isCrossMismatch

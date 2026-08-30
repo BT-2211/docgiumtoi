@@ -537,24 +537,24 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         />
 
         {/* Minimalist Top Notification Pill Badge */}
-        <div className="absolute top-4 inset-x-0 flex justify-center pointer-events-none z-20 px-4">
+        <div className="absolute top-4 inset-x-0 flex justify-center pointer-events-none z-20 px-16 sm:px-20">
           <div
             id="pill-instruction-badge"
             className={`${
               multiSideSession ? 'bg-blue-900/90 border-blue-400' : 'bg-[#1A1A1A]/85 border-white/30'
-            } text-white backdrop-blur-md px-5 py-2.5 rounded-full border-2 shadow-xl flex items-center gap-2`}
+            } text-white backdrop-blur-md px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border-2 shadow-xl flex items-center gap-2 text-center max-w-full`}
           >
             {multiSideSession ? (
               <>
-                <RotateCcw className="w-5 h-5 text-yellow-400 shrink-0" strokeWidth={2.75} />
-                <span className="text-sm sm:text-base font-black tracking-wide uppercase text-white">
-                  📸 LẬT MẶT SAU / MẶT ĐÁY ĐỂ SOI HSD
+                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 shrink-0" strokeWidth={2.75} />
+                <span className="text-xs sm:text-base font-black tracking-wide uppercase text-white truncate">
+                  📸 LẬT MẶT SAU / ĐÁY SOI HSD
                 </span>
               </>
             ) : (
               <>
-                <Camera className="w-5 h-5 text-[#E65F2B] shrink-0" strokeWidth={2.75} />
-                <span className="text-sm sm:text-base font-black tracking-wide uppercase text-white">
+                <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-[#E65F2B] shrink-0" strokeWidth={2.75} />
+                <span className="text-xs sm:text-base font-black tracking-wide uppercase text-white truncate">
                   📸 ĐẶT VẬT DỤNG VÀO KHUNG HÌNH
                 </span>
               </>
@@ -610,28 +610,23 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
         {/* Camera Control Overlays (Top-Right) */}
         {cameraActive && (
-          <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-            {/* Manual Flash Toggle Button */}
+          <div className="absolute top-4 right-3 sm:right-4 flex items-center gap-2 z-20">
+            {/* Manual Flash Toggle Icon Button (Compact Icon Only) */}
             <button
               id="btn-toggle-flash-manual"
               onClick={toggleTorch}
-              className={`min-h-[44px] px-3.5 py-2 rounded-full flex items-center gap-1.5 font-black text-xs sm:text-sm shadow-xl backdrop-blur-md border-2 transition-all cursor-pointer ${
+              className={`w-11 h-11 rounded-full flex items-center justify-center shadow-xl backdrop-blur-md border-2 transition-all cursor-pointer ${
                 torchOn
-                  ? 'bg-yellow-400 text-yellow-950 border-yellow-200 ring-2 ring-yellow-400'
+                  ? 'bg-yellow-400 text-yellow-950 border-yellow-200 ring-2 ring-yellow-400/80 shadow-yellow-500/30'
                   : 'bg-black/60 text-white border-white/30 hover:bg-black/80'
               }`}
-              title={torchOn ? 'Tắt đèn Flash' : 'Bật đèn Flash'}
+              title={torchOn ? 'Đang bật Flash (Chạm để tắt)' : 'Đang tắt Flash (Chạm để bật)'}
+              aria-label={torchOn ? 'Tắt đèn Flash' : 'Bật đèn Flash'}
             >
               {torchOn ? (
-                <>
-                  <Zap className="w-4 h-4 fill-current text-yellow-950 animate-pulse" />
-                  <span className="uppercase tracking-wider">FLASH: BẬT</span>
-                </>
+                <Zap className="w-5 h-5 fill-current text-yellow-950 animate-pulse" />
               ) : (
-                <>
-                  <ZapOff className="w-4 h-4 text-gray-300" />
-                  <span className="uppercase tracking-wider">FLASH: TẮT</span>
-                </>
+                <ZapOff className="w-5 h-5 text-gray-200" />
               )}
             </button>
 
@@ -639,8 +634,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             <button
               id="btn-toggle-camera-facing"
               onClick={toggleCameraFacing}
-              className="w-11 h-11 rounded-full bg-black/60 text-white shadow-lg hover:bg-black/80 flex items-center justify-center border border-white/30 cursor-pointer transition-all"
+              className="w-11 h-11 rounded-full bg-black/60 text-white shadow-lg hover:bg-black/80 flex items-center justify-center border-2 border-white/30 cursor-pointer transition-all active:scale-95"
               title="Đổi camera trước/sau"
+              aria-label="Đổi camera trước hoặc sau"
             >
               <RefreshCw className="w-5 h-5" />
             </button>

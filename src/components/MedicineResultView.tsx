@@ -17,7 +17,7 @@ import {
   ShoppingBag,
   BookOpen,
   FileText,
-  Volume2
+  Volume2,
 } from 'lucide-react';
 import { MedicineAnalysisResult, SeniorSettings } from '../types';
 import { speechService } from '../services/speechService';
@@ -95,10 +95,23 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
   const handleSpeakOnlyHSD = (e: React.MouseEvent) => {
     e.stopPropagation();
     let text = '';
+    const mfgText = result.detected_mfg_date || result.mfg_date || result.expiration_info?.mfg_date_text?.replace(/^NSX:\s*/i, '');
+    const shelfLifeText = result.detected_shelf_life || result.shelf_life_text || result.expiration_info?.shelf_life_text;
+
     if (result.expiration_info?.status === 'EXPIRED') {
-      text = `Dạ Bác ơi! Sản phẩm ${result.product_name} này ĐÃ HẾT HẠN SỬ DỤNG từ ${result.expiration_info.expiry_date_text}. Bác tuyệt đối không được dùng nữa để bảo vệ sức khỏe ạ!`;
+      if (mfgText && shelfLifeText) {
+        text = `Dạ Bác ơi! Sản phẩm ${result.product_name} sản xuất ngày ${mfgText}, hạn ${shelfLifeText} nên ĐÃ HẾT HẠN SỬ DỤNG (${result.expiration_info.expiry_date_text}). Bác tuyệt đối không được dùng nữa để bảo vệ sức khỏe ạ!`;
+      } else {
+        text = `Dạ Bác ơi! Sản phẩm ${result.product_name} này ĐÃ HẾT HẠN SỬ DỤNG từ ${result.expiration_info.expiry_date_text}. Bác tuyệt đối không được dùng nữa để bảo vệ sức khỏe ạ!`;
+      }
     } else if (result.expiration_info?.status === 'VALID') {
-      text = `Dạ thưa Bác! Sản phẩm ${result.product_name} CÒN HẠN SỬ DỤNG đến ${result.expiration_info.expiry_date_text} ạ.`;
+      if (mfgText && shelfLifeText) {
+        text = `Dạ sản phẩm này sản xuất ngày ${mfgText}, hạn sử dụng ${shelfLifeText} nên Bác dùng tốt đến ${result.expiration_info.expiry_date_text} ạ!`;
+      } else if (mfgText) {
+        text = `Dạ sản phẩm này sản xuất ngày ${mfgText}, hạn sử dụng đến ${result.expiration_info.expiry_date_text} ạ!`;
+      } else {
+        text = `Dạ thưa Bác! Sản phẩm ${result.product_name} CÒN HẠN SỬ DỤNG đến ${result.expiration_info.expiry_date_text} ạ.`;
+      }
     } else {
       text = `Dạ thưa Bác! Trên bao bì sản phẩm ${result.product_name} hiện không thấy rõ ngày hết hạn. Bác nên nhờ con cháu kiểm tra lại trước khi dùng ạ.`;
     }
@@ -404,22 +417,57 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             </button>
           </div>
 
-          {/* Extra Expiration Metadata Sub-box */}
-          {(result.expiration_info?.mfg_date_text || result.expiration_info?.location_found) && (
+          {/* Extra Expiration Metadata Sub-box (NSX, Quy định thời hạn, Phép tính) */}
+          {(result.detected_mfg_date ||
+            result.mfg_date ||
+            result.expiration_info?.mfg_date_text ||
+            result.detected_shelf_life ||
+            result.shelf_life_text ||
+            result.expiration_info?.shelf_life_text ||
+            result.expiry_calculation_note ||
+            result.expiration_info?.calculation_note ||
+            result.expiration_info?.location_found) && (
             <div
-              className={`pt-3 border-t grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm font-bold ${
-                isExpired ? 'border-white/20 text-white/90' : isValid ? 'border-green-200 text-green-900' : 'border-amber-200 text-amber-900'
+              className={`pt-3.5 border-t flex flex-col gap-2 text-sm sm:text-base font-bold ${
+                isExpired ? 'border-white/20 text-white/95' : isValid ? 'border-green-200 text-green-950' : 'border-amber-200 text-amber-950'
               }`}
             >
-              {result.expiration_info.mfg_date_text && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 shrink-0" />
-                  <span>{result.expiration_info.mfg_date_text}</span>
-                </div>
-              )}
-              {result.expiration_info.location_found && (
-                <div className="flex items-center gap-2">
-                  <span>📍 Vị trí in: {result.expiration_info.location_found}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(result.detected_mfg_date || result.mfg_date || result.expiration_info?.mfg_date_text) && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 shrink-0" />
+                    <span>
+                      {result.expiration_info?.mfg_date_text || `NSX: ${result.detected_mfg_date || result.mfg_date}`}
+                    </span>
+                  </div>
+                )}
+                {(result.detected_shelf_life || result.shelf_life_text || result.expiration_info?.shelf_life_text) && (
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>
+                      Thời hạn: {result.detected_shelf_life || result.shelf_life_text || result.expiration_info?.shelf_life_text}
+                    </span>
+                  </div>
+                )}
+                {result.expiration_info?.location_found && (
+                  <div className="flex items-center gap-2">
+                    <span>📍 Vị trí in: {result.expiration_info.location_found}</span>
+                  </div>
+                )}
+              </div>
+
+              {(result.expiry_calculation_note || result.expiration_info?.calculation_note) && (
+                <div
+                  className={`mt-1 px-3 py-2 rounded-[14px] text-xs sm:text-sm font-black flex items-center gap-2 ${
+                    isExpired
+                      ? 'bg-black/25 text-yellow-300'
+                      : isValid
+                      ? 'bg-green-700/15 text-[#137333]'
+                      : 'bg-amber-400/30 text-amber-950'
+                  }`}
+                >
+                  <span>💡</span>
+                  <span>{result.expiry_calculation_note || result.expiration_info?.calculation_note}</span>
                 </div>
               )}
             </div>

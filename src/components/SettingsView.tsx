@@ -3,7 +3,6 @@ import {
   Settings,
   Volume2,
   Type,
-  PhoneCall,
   Heart,
   Play,
   Check,
@@ -381,37 +380,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </div>
 
-      {/* 4. EMERGENCY HOTLINES FOR SENIORS */}
-      <div className="bg-white border-2 border-red-200 p-6 sm:p-7 rounded-[32px] flex flex-col gap-4 shadow-xs">
-        <div className="flex items-center gap-3 text-red-600">
-          <PhoneCall className="w-8 h-8 shrink-0" strokeWidth={2.75} />
-          <h3 className="text-2xl font-black uppercase tracking-tight">Đường Dây Nóng Khẩn Cấp</h3>
-        </div>
-
-        <p className="text-base sm:text-lg font-bold text-gray-600">
-          Khi có dấu hiệu bất thường về sức khỏe hoặc cần hỗ trợ y tế khẩn cấp:
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-3">
-          <a
-            href="tel:115"
-            className="flex-1 min-h-[64px] bg-red-600 text-white rounded-[20px] flex items-center justify-center gap-3 font-black text-xl hover:bg-red-700 active:scale-95 shadow-md shadow-red-500/25 uppercase tracking-wide"
-          >
-            <PhoneCall className="w-6 h-6" strokeWidth={2.75} />
-            <span>🚑 CẤP CỨU 115</span>
-          </a>
-
-          <a
-            href="tel:19009095"
-            className="flex-1 min-h-[64px] bg-[#2B67E6] text-white rounded-[20px] flex items-center justify-center gap-3 font-black text-xl hover:bg-[#2055cb] active:scale-95 shadow-md shadow-blue-500/25 uppercase tracking-wide"
-          >
-            <PhoneCall className="w-6 h-6" strokeWidth={2.75} />
-            <span>📞 1900 9095 (Bộ Y Tế)</span>
-          </a>
-        </div>
-      </div>
-
-      {/* 5. ABOUT THE APP */}
+      {/* 4. ABOUT THE APP */}
       <div className="bg-[#E6F4EA] border-2 border-[#34A853]/30 p-5 rounded-[24px] flex items-center gap-4 text-center justify-center shadow-xs">
         <Heart className="w-7 h-7 text-red-500 fill-current shrink-0" />
         <p className="text-base text-[#137333] font-bold text-left">

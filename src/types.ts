@@ -6,6 +6,8 @@ export interface ExpirationInfo {
   status: ExpiryStatus;
   expiry_date_text: string;
   mfg_date_text?: string;
+  shelf_life_text?: string;
+  calculation_note?: string;
   days_remaining_text?: string;
   location_found?: string;
 }
@@ -19,11 +21,20 @@ export interface MultiSideSession {
 }
 
 export interface MedicineAnalysisResult {
-  // Standardized AI schema fields
+  // Standardized AI strict schema fields
   status?: 'success' | 'unclear' | 'not_found' | 'need_second_side' | 'individual_pack' | 'cross_product_mismatch';
   item_type?: ItemType;
   item_name?: string;
+  detected_mfg_date?: string;
+  has_mfg_label?: boolean;
+  detected_shelf_life?: string;
+  shelf_life_months?: number;
+  is_calculated?: boolean;
+  calculated_expiry_date?: string;
   expiry_date?: string;
+  mfg_date?: string;
+  shelf_life_text?: string;
+  expiry_calculation_note?: string;
   is_expired?: boolean;
   usage_summary?: string;
   usage_instructions?: string;
