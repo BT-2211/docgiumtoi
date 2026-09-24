@@ -43,23 +43,80 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
   });
   const [showFullScript, setShowFullScript] = useState(false);
 
-  // Helper to ensure Expiration Date (HSD) is always clearly included in speech audio
+  const rawType = (result.item_type || result.item_category || '').toUpperCase();
+  const isMedicine = rawType.includes('MEDICINE') || rawType.includes('THUỐC');
+  const isPersonalItem =
+    rawType.includes('PERSONAL') ||
+    rawType.includes('HOUSEHOLD') ||
+    rawType.includes('GIA DỤNG') ||
+    rawType.includes('VÍ') ||
+    rawType.includes('ĐIỆN THOẠI') ||
+    rawType.includes('CHÌA KHÓA') ||
+    rawType.includes('KÍNH') ||
+    rawType.includes('ĐIỀU KHIỂN') ||
+    rawType.includes('QUẠT') ||
+    rawType.includes('NỒI');
+  const isConsumerGoods = !isMedicine && !isPersonalItem;
+
+  // LẬT HỘP CHỈ ÁP DỤNG CHO ĐỒ Y TẾ / THUỐC HOẶC ĐỒ ĂN / HÀNG TIÊU DÙNG
+  const isNeedSecondSide = result.status === 'need_second_side' && !isPersonalItem && (isMedicine || isConsumerGoods);
+  const isSuccess = (!result.status || result.status === 'success' || (result.status === 'need_second_side' && isPersonalItem));
+  const isIndividualPack = result.status === 'individual_pack';
+  const isCrossMismatch = result.status === 'cross_product_mismatch' || result.is_cross_mismatch;
+  const isUnclear = result.status === 'unclear';
+  const isNotFound = result.status === 'not_found';
+  const isUnclearOrNotFound = isUnclear || isNotFound;
+
+  const isExpired = Boolean(result.is_expired || result.expiration_info?.status === 'EXPIRED');
+  const isValid = !isExpired && result.expiration_info?.status === 'VALID';
+  const isHsdUnclear = !isExpired && result.expiration_info?.status === 'UNCLEAR';
+  const shouldShowExpiration = isSuccess && !isPersonalItem && result.expiration_info?.status !== 'NOT_APPLICABLE';
+
+  // Helper to ensure Expiration Date (HSD) is always clearly included in speech audio:
+  // "Nếu nhìn thấy HSD thì nói nhưng nếu không chắc thì concise"
   const getFullSpeechText = () => {
-    let script = result.speech_text || result.speech_script || '';
+    let script = (result.speech_text || result.speech_script || '').trim();
     if (result.status === 'unclear' || result.status === 'not_found') {
-      return script;
+      return script || 'Ảnh chụp chưa rõ nét, Bác bấm chụp lại giúp cháu ạ.';
     }
-    const mentionsHSD = /hạn|hsd|exp|hết hạn|ngày sản xuất/i.test(script);
-    if (!mentionsHSD && result.expiration_info) {
-      let hsdSpoken = '';
-      if (result.expiration_info.status === 'EXPIRED') {
-        hsdSpoken = ` Cảnh báo: Sản phẩm này ĐÃ HẾT HẠN SỬ DỤNG (${result.expiration_info.expiry_date_text}), Bác tuyệt đối không được dùng nữa ạ!`;
-      } else if (result.expiration_info.status === 'VALID') {
-        hsdSpoken = ` Về hạn sử dụng: Sản phẩm còn hạn dùng, ${result.expiration_info.expiry_date_text} ạ.`;
+
+    const expiryDateText = result.expiration_info?.expiry_date_text || result.expiry_date || '';
+    const hasDetectedDate = Boolean(
+      expiryDateText &&
+      /\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-\.]\d{2,4}/.test(expiryDateText)
+    );
+    const mentionsHsd = /hạn\s*sử\s*dụng|hết\s*hạn|còn\s*hạn/i.test(script);
+    const mentionsDate = /\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}\s*tháng\s*\d{1,2}/.test(script);
+
+    // 1. Nếu hết hạn: bắt buộc cảnh báo to rõ kèm ngày hết hạn
+    if (isExpired) {
+      if (!script.toLowerCase().includes('hết hạn')) {
+        const cleanDate = expiryDateText.replace(/^HSD:\s*/i, '');
+        script = `Cảnh báo: Sản phẩm này ĐÃ HẾT HẠN SỬ DỤNG ${cleanDate ? `từ ${cleanDate}` : ''}. Bác tuyệt đối không được dùng nữa ạ! ${script}`;
       }
-      script = `${script} ${hsdSpoken}`;
     }
-    return script;
+    // 2. Nếu nhìn thấy HSD còn hạn: "Nếu nhìn thấy HSD thì nói" -> Bắt buộc phát âm ngày HSD
+    else if (isValid && hasDetectedDate) {
+      if (!mentionsHsd || !mentionsDate) {
+        const cleanDate = expiryDateText.replace(/^HSD:\s*/i, '');
+        script = `${script} Hạn sử dụng đến ngày ${cleanDate} Bác ạ.`;
+      }
+    }
+    // 3. Nếu không chắc chắn: nói ngắn gọn, súc tích (concise)
+    else if (isHsdUnclear && !isPersonalItem && (isMedicine || isConsumerGoods)) {
+      if (!mentionsHsd && !script.toLowerCase().includes('chưa rõ') && !script.toLowerCase().includes('chưa thấy')) {
+        script = `${script} Chưa thấy rõ hạn dùng, Bác nhờ con cháu xem lại giúp ạ.`;
+      }
+    }
+
+    return script
+      .replace(/\bHSD\b/g, 'hạn sử dụng')
+      .replace(/\bNSX\b/g, 'ngày sản xuất')
+      .replace(/\bEXP\b/g, 'hạn sử dụng')
+      .replace(/\bMFG\b/g, 'ngày sản xuất')
+      .replace(/nhé\s+ạ/gi, 'ạ')
+      .replace(/nhé\s+bác/gi, 'Bác ạ')
+      .trim();
   };
 
   // Tự động phát giọng nói (Auto-play) ngay lập tức khi hiển thị màn hình kết quả
@@ -99,55 +156,22 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
     let text = '';
     const mfgText = result.detected_mfg_date || result.mfg_date || result.expiration_info?.mfg_date_text?.replace(/^NSX:\s*/i, '');
     const shelfLifeText = result.detected_shelf_life || result.shelf_life_text || result.expiration_info?.shelf_life_text;
+    const cleanExpiry = (result.expiration_info?.expiry_date_text || result.expiry_date || '').replace(/^HSD:\s*/i, '');
 
-    if (result.expiration_info?.status === 'EXPIRED') {
+    if (isExpired || result.expiration_info?.status === 'EXPIRED') {
+      text = `Dạ Bác ơi! Sản phẩm ${result.product_name} ĐÃ HẾT HẠN SỬ DỤNG ${cleanExpiry ? `từ ngày ${cleanExpiry}` : ''}. Bác tuyệt đối không được dùng nữa để bảo vệ sức khỏe ạ!`;
+    } else if (isValid || result.expiration_info?.status === 'VALID') {
       if (mfgText && shelfLifeText) {
-        text = `Dạ Bác ơi! Sản phẩm ${result.product_name} sản xuất ngày ${mfgText}, hạn ${shelfLifeText} nên ĐÃ HẾT HẠN SỬ DỤNG (${result.expiration_info.expiry_date_text}). Bác tuyệt đối không được dùng nữa để bảo vệ sức khỏe ạ!`;
+        text = `Dạ sản phẩm này sản xuất ngày ${mfgText}, hạn dùng ${shelfLifeText}, dùng tốt đến ngày ${cleanExpiry} Bác ạ!`;
       } else {
-        text = `Dạ Bác ơi! Sản phẩm ${result.product_name} này ĐÃ HẾT HẠN SỬ DỤNG từ ${result.expiration_info.expiry_date_text}. Bác tuyệt đối không được dùng nữa để bảo vệ sức khỏe ạ!`;
-      }
-    } else if (result.expiration_info?.status === 'VALID') {
-      if (mfgText && shelfLifeText) {
-        text = `Dạ sản phẩm này sản xuất ngày ${mfgText}, hạn sử dụng ${shelfLifeText} nên Bác dùng tốt đến ${result.expiration_info.expiry_date_text} ạ!`;
-      } else if (mfgText) {
-        text = `Dạ sản phẩm này sản xuất ngày ${mfgText}, hạn sử dụng đến ${result.expiration_info.expiry_date_text} ạ!`;
-      } else {
-        text = `Dạ thưa Bác! Sản phẩm ${result.product_name} CÒN HẠN SỬ DỤNG đến ${result.expiration_info.expiry_date_text} ạ.`;
+        text = `Dạ thưa Bác! Sản phẩm CÒN HẠN SỬ DỤNG đến ngày ${cleanExpiry} ạ.`;
       }
     } else {
-      text = `Dạ thưa Bác! Trên bao bì sản phẩm ${result.product_name} hiện không thấy rõ ngày hết hạn. Bác nên nhờ con cháu kiểm tra lại trước khi dùng ạ.`;
+      // Khi không chắc chắn: đọc thật ngắn gọn, súc tích (concise)
+      text = `Dạ thưa Bác! Chưa thấy rõ hạn sử dụng trên mặt này, Bác nhờ con cháu xem lại giúp ạ.`;
     }
-    speechService.speak(text, settings.speechRate);
+    speechService.speak(text, settings.speechRate || 0.85);
   };
-
-  const rawType = (result.item_type || result.item_category || '').toUpperCase();
-  const isMedicine = rawType.includes('MEDICINE') || rawType.includes('THUỐC');
-  const isPersonalItem =
-    rawType.includes('PERSONAL') ||
-    rawType.includes('HOUSEHOLD') ||
-    rawType.includes('GIA DỤNG') ||
-    rawType.includes('VÍ') ||
-    rawType.includes('ĐIỆN THOẠI') ||
-    rawType.includes('CHÌA KHÓA') ||
-    rawType.includes('KÍNH') ||
-    rawType.includes('ĐIỀU KHIỂN') ||
-    rawType.includes('QUẠT') ||
-    rawType.includes('NỒI');
-  const isConsumerGoods = !isMedicine && !isPersonalItem;
-
-  // LẬT HỘP CHỈ ÁP DỤNG CHO ĐỒ Y TẾ / THUỐC HOẶC ĐỒ ĂN / HÀNG TIÊU DÙNG (KHÔNG ÁP DỤNG CHO ĐỒ GIA DỤNG / ĐỒ CÁ NHÂN)
-  const isNeedSecondSide = result.status === 'need_second_side' && !isPersonalItem && (isMedicine || isConsumerGoods);
-  const isSuccess = (!result.status || result.status === 'success' || (result.status === 'need_second_side' && isPersonalItem));
-  const isIndividualPack = result.status === 'individual_pack';
-  const isCrossMismatch = result.status === 'cross_product_mismatch' || result.is_cross_mismatch;
-  const isUnclear = result.status === 'unclear';
-  const isNotFound = result.status === 'not_found';
-  const isUnclearOrNotFound = isUnclear || isNotFound;
-
-  const isExpired = Boolean(result.is_expired || result.expiration_info?.status === 'EXPIRED');
-  const isValid = !isExpired && result.expiration_info?.status === 'VALID';
-  const isHsdUnclear = !isExpired && result.expiration_info?.status === 'UNCLEAR';
-  const shouldShowExpiration = isSuccess && !isPersonalItem && result.expiration_info?.status !== 'NOT_APPLICABLE';
 
   const usageSummaryText = result.usage_summary || result.primary_purpose || result.primary_function || '';
   
@@ -196,7 +220,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
               {isPersonalItem ? 'ĐÃ NHẬN DIỆN ĐỒ VẬT' : 'ĐÃ NHẬN DIỆN NHÃN BAO BÌ'}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black bg-[#137333] text-white px-3 py-1.5 rounded-full uppercase tracking-wider shadow-xs">
+          <div className="flex items-center gap-1.5 text-sm sm:text-base font-black bg-[#137333] text-white px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow-xs">
             <BookmarkCheck className="w-4 h-4" />
             <span>Đã lưu vào tủ</span>
           </div>
@@ -209,7 +233,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
               CHỤP NHẦM SẢN PHẨM KHÁC
             </span>
           </div>
-          <span className="text-xs sm:text-sm font-black bg-red-200 text-red-900 px-3 py-1.5 rounded-full uppercase tracking-wider">
+          <span className="text-sm sm:text-base font-black bg-red-200 text-red-900 px-3.5 py-1.5 rounded-full uppercase tracking-wider">
             Khác mặt 1
           </span>
         </div>
@@ -221,7 +245,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
               {isMedicine ? 'VỈ THUỐC XÉ LẺ (KHÔNG HSD)' : 'GÓI BÓC LẺ TỪ HỘP LỚN'}
             </span>
           </div>
-          <span className={`text-xs sm:text-sm font-black ${isMedicine ? 'bg-red-200 text-red-900' : 'bg-amber-200 text-amber-900'} px-3 py-1.5 rounded-full uppercase tracking-wider`}>
+          <span className={`text-sm sm:text-base font-black ${isMedicine ? 'bg-red-200 text-red-900' : 'bg-amber-200 text-amber-900'} px-3.5 py-1.5 rounded-full uppercase tracking-wider`}>
             Không in HSD lẻ
           </span>
         </div>
@@ -233,7 +257,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
               {isUnclear ? 'ẢNH BỊ MỜ / LÓA SÁNG' : 'CHƯA TÌM THẤY VẬT PHẨM'}
             </span>
           </div>
-          <span className="text-xs sm:text-sm font-black bg-amber-200 text-amber-900 px-3 py-1.5 rounded-full uppercase tracking-wider">
+          <span className="text-sm sm:text-base font-black bg-amber-200 text-amber-900 px-3.5 py-1.5 rounded-full uppercase tracking-wider">
             Cần chụp lại
           </span>
         </div>
@@ -248,10 +272,10 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-[20px] border-2 border-gray-200 shrink-0"
           />
           <div className="flex-1">
-            <span className="bg-[#E65F2B] text-white px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider">
+            <span className="bg-[#E65F2B] text-white px-3.5 py-1 rounded-full text-sm font-black uppercase tracking-wider">
               Ảnh vừa chụp
             </span>
-            <p className="text-base text-[#1A1A1A] font-bold mt-1.5">
+            <p className="text-lg text-[#1A1A1A] font-bold mt-1.5">
               {isSuccess
                 ? (isPersonalItem ? 'Đã nhận diện chính xác đồ vật cá nhân của Bác.' : 'Đã đọc chính xác nhãn mác và hạn sử dụng cho Bác.')
                 : isCrossMismatch
@@ -359,21 +383,22 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
                 )}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                {/* Status Badges - BIG & HIGH CONTRAST */}
+                <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`px-3 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${
+                    className={`px-3.5 py-1 rounded-full text-sm sm:text-base font-black uppercase tracking-wide ${
                       isExpired
                         ? 'bg-white text-red-600'
                         : isValid
                         ? 'bg-[#137333] text-white'
-                        : 'bg-amber-300 text-amber-900'
+                        : 'bg-amber-300 text-amber-950'
                     }`}
                   >
-                    {isExpired ? '⛔ HẾT HẠN SỬ DỤNG' : isValid ? '✅ CÒN HẠN DÙNG' : '⚠️ KHÔNG RÕ HSD'}
+                    {isExpired ? '⛔ HẾT HẠN SỬ DỤNG' : isValid ? '✅ CÒN HẠN DÙNG' : '⚠️ CHƯA RÕ HẠN DÙNG'}
                   </span>
                   {result.expiration_info?.days_remaining_text && (
                     <span
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                      className={`px-3 py-1 rounded-full text-sm sm:text-base font-black ${
                         isExpired ? 'bg-red-800 text-white' : isValid ? 'bg-[#137333]/15 text-[#137333]' : 'bg-amber-200 text-amber-950'
                       }`}
                     >
@@ -381,21 +406,29 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
                     </span>
                   )}
                 </div>
+
+                {/* Main Heading - BIG & CONCISE: No tiny text, kept concise so big text fits comfortably */}
                 <h3
-                  className={`text-2xl sm:text-4xl font-black mt-1.5 tracking-tight leading-tight ${
+                  className={`text-3xl sm:text-5xl font-black mt-2 tracking-tight leading-tight ${
                     isExpired ? 'text-white' : isHsdUnclear ? 'text-amber-950' : 'text-[#137333]'
                   }`}
                 >
-                  {result.expiration_info?.expiry_date_text || result.expiry_date || 'Không tìm thấy HSD trên nhãn'}
+                  {isHsdUnclear
+                    ? 'CHƯA RÕ HẠN DÙNG'
+                    : isExpired
+                    ? `HẾT HẠN: ${(result.expiration_info?.expiry_date_text || result.expiry_date || '').replace(/^HSD:\s*/i, '')}`
+                    : `HSD: ${(result.expiration_info?.expiry_date_text || result.expiry_date || '').replace(/^HSD:\s*/i, '')}`}
                 </h3>
+
+                {/* Concise explanation in big text */}
                 {isExpired && (
-                  <p className="text-white/95 font-black text-base sm:text-lg mt-1 uppercase">
-                    TUYỆT ĐỐI KHÔNG DÙNG SẢN PHẨM NÀY NỮA ĐỂ BẢO VỆ SỨC KHỎE!
+                  <p className="text-white font-black text-lg sm:text-2xl mt-1.5 uppercase leading-snug">
+                    TUYỆT ĐỐI KHÔNG DÙNG NỮA Ạ!
                   </p>
                 )}
                 {isHsdUnclear && (
-                  <p className="text-amber-800 font-bold text-sm sm:text-base mt-1">
-                    Ngày in trên nhãn bị mờ hoặc không in. Bác nên nhờ con cháu kiểm tra lại ạ.
+                  <p className="text-amber-950 font-black text-lg sm:text-2xl mt-1.5 leading-snug">
+                    Bác nhờ con cháu xem lại nhãn giúp ạ!
                   </p>
                 )}
               </div>
@@ -405,7 +438,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
             <button
               id="btn-listen-hsd-only"
               onClick={handleSpeakOnlyHSD}
-              className={`min-h-[54px] px-5 rounded-[20px] font-black text-base flex items-center justify-center gap-2 shrink-0 shadow-md active:scale-95 transition-all uppercase tracking-wider cursor-pointer ${
+              className={`min-h-[56px] px-6 rounded-[22px] font-black text-lg sm:text-xl flex items-center justify-center gap-2.5 shrink-0 shadow-md active:scale-95 transition-all uppercase tracking-wide cursor-pointer ${
                 isExpired
                   ? 'bg-white text-red-600 hover:bg-gray-100'
                   : isValid
@@ -413,77 +446,58 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
                   : 'bg-amber-400 text-amber-950 hover:bg-amber-500'
               }`}
             >
-              <Volume2 className="w-5 h-5 stroke-[2.75]" />
+              <Volume2 className="w-6 h-6 stroke-[2.75]" />
               <span>🔊 Nghe Hạn Dùng</span>
             </button>
           </div>
 
-          {/* Extra Expiration Metadata Sub-box (NSX, Quy định thời hạn, Phép tính, Mở nắp) */}
+          {/* Extra Expiration Metadata Sub-box: BIG CONCISE PILLS (No tiny text) */}
           {(result.detected_mfg_date ||
             result.mfg_date ||
             result.expiration_info?.mfg_date_text ||
             result.detected_shelf_life ||
             result.shelf_life_text ||
-            result.expiration_info?.shelf_life_text ||
             result.after_opening_instruction ||
             result.opened_storage_note ||
             result.expiry_calculation_note ||
-            result.expiration_info?.calculation_note ||
-            result.expiration_info?.location_found) && (
+            result.expiration_info?.calculation_note) && (
             <div
-              className={`pt-3.5 border-t flex flex-col gap-2 text-sm sm:text-base font-bold ${
-                isExpired ? 'border-white/20 text-white/95' : isValid ? 'border-green-200 text-green-950' : 'border-amber-200 text-amber-950'
+              className={`pt-3 border-t-2 flex flex-col gap-2.5 ${
+                isExpired ? 'border-white/20 text-white' : isValid ? 'border-green-200 text-green-950' : 'border-amber-200 text-amber-950'
               }`}
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {(result.Text_In_Phun_1 || result.raw_text_inkjet) && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-black/10 px-2 py-0.5 rounded font-mono">In phun:</span>
-                    <span>{result.Text_In_Phun_1 || result.raw_text_inkjet}</span>
-                  </div>
-                )}
-                {(result.Text_Chu_Nho_xung_quanh || result.raw_text_fine_print) && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-black/10 px-2 py-0.5 rounded font-mono">Chữ nhỏ:</span>
-                    <span>{result.Text_Chu_Nho_xung_quanh || result.raw_text_fine_print}</span>
-                  </div>
-                )}
+              <div className="flex flex-wrap items-center gap-2.5">
                 {(result.detected_mfg_date || result.mfg_date || result.expiration_info?.mfg_date_text) && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 shrink-0" />
-                    <span>
-                      {result.expiration_info?.mfg_date_text || `NSX: ${result.detected_mfg_date || result.mfg_date}`}
-                    </span>
+                  <div className={`px-4 py-2 rounded-[16px] text-base sm:text-lg font-black flex items-center gap-2 ${
+                    isExpired ? 'bg-black/20 text-white' : isValid ? 'bg-green-700/10 text-[#137333]' : 'bg-amber-200/80 text-amber-950'
+                  }`}>
+                    <Calendar className="w-5 h-5 shrink-0" />
+                    <span>NSX: {(result.detected_mfg_date || result.mfg_date || result.expiration_info?.mfg_date_text || '').replace(/^NSX:\s*/i, '')}</span>
                   </div>
                 )}
                 {(result.detected_shelf_life || result.shelf_life_text || result.expiration_info?.shelf_life_text) && (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>
-                      Thời hạn: {result.detected_shelf_life || result.shelf_life_text || result.expiration_info?.shelf_life_text}
-                    </span>
-                  </div>
-                )}
-                {result.expiration_info?.location_found && (
-                  <div className="flex items-center gap-2">
-                    <span>📍 Vị trí in: {result.expiration_info.location_found}</span>
+                  <div className={`px-4 py-2 rounded-[16px] text-base sm:text-lg font-black flex items-center gap-2 ${
+                    isExpired ? 'bg-black/20 text-white' : isValid ? 'bg-green-700/10 text-[#137333]' : 'bg-amber-200/80 text-amber-950'
+                  }`}>
+                    <Clock className="w-5 h-5 shrink-0" />
+                    <span>Thời hạn: {result.detected_shelf_life || result.shelf_life_text || result.expiration_info?.shelf_life_text}</span>
                   </div>
                 )}
               </div>
 
               {(result.after_opening_instruction || result.opened_storage_note) && (
                 <div
-                  className={`mt-1 px-3.5 py-2.5 rounded-[16px] text-xs sm:text-sm font-black flex items-start gap-2.5 ${
+                  className={`px-4 py-3 rounded-[18px] text-base sm:text-lg font-black flex items-start gap-2.5 ${
                     isExpired
                       ? 'bg-black/30 text-amber-200 border border-amber-400/30'
                       : isValid
                       ? 'bg-blue-600/15 text-blue-950 border border-blue-300/40'
-                      : 'bg-amber-400/30 text-amber-950 border border-amber-300'
+                      : 'bg-amber-300/70 text-amber-950 border border-amber-400'
                   }`}
                 >
-                  <span className="text-base shrink-0">🥛</span>
+                  <span className="text-xl shrink-0">🥛</span>
                   <div>
-                    <span className="uppercase tracking-wide font-black block text-[11px] opacity-80">Sau khi mở nắp:</span>
+                    <span className="uppercase tracking-wide font-black block text-sm opacity-90">Sau khi mở nắp:</span>
                     <span>{result.after_opening_instruction || result.opened_storage_note}</span>
                   </div>
                 </div>
@@ -491,15 +505,15 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
 
               {(result.expiry_calculation_note || result.expiration_info?.calculation_note) && (
                 <div
-                  className={`mt-1 px-3 py-2 rounded-[14px] text-xs sm:text-sm font-black flex items-center gap-2 ${
+                  className={`px-4 py-2.5 rounded-[16px] text-base sm:text-lg font-black flex items-center gap-2.5 ${
                     isExpired
                       ? 'bg-black/25 text-yellow-300'
                       : isValid
                       ? 'bg-green-700/15 text-[#137333]'
-                      : 'bg-amber-400/30 text-amber-950'
+                      : 'bg-amber-200/80 text-amber-950'
                   }`}
                 >
-                  <span>💡</span>
+                  <span className="text-lg shrink-0">💡</span>
                   <span>{result.expiry_calculation_note || result.expiration_info?.calculation_note}</span>
                 </div>
               )}
@@ -546,7 +560,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         {/* Primary function / Purpose - Only shown on SUCCESS if available */}
         {isSuccess && usageSummaryText && (
           <div className="bg-[#F7F9FC] border-2 border-gray-200/80 rounded-[24px] p-5 sm:p-6 text-left">
-            <p className="text-xs uppercase tracking-widest text-[#2B67E6] font-black mb-1.5 flex items-center gap-1.5">
+            <p className="text-sm sm:text-base uppercase tracking-widest text-[#2B67E6] font-black mb-1.5 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-[#2B67E6]" />
               <span>{isPersonalItem ? 'CÔNG DỤNG ĐỒ VẬT' : 'CÔNG DỤNG CHÍNH'}</span>
             </p>
@@ -562,7 +576,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
         <div className={`p-6 sm:p-7 rounded-[32px] border-l-8 shadow-sm flex flex-col gap-3 ${
           isMedicine ? 'bg-[#F7F9FC] border-[#2B67E6]' : 'bg-[#FFF9F5] border-[#E65F2B]'
         }`}>
-          <p className={`text-xs sm:text-sm font-black uppercase tracking-widest flex items-center gap-2 ${
+          <p className={`text-base sm:text-lg font-black uppercase tracking-widest flex items-center gap-2 ${
             isMedicine ? 'text-[#2B67E6]' : 'text-[#E65F2B]'
           }`}>
             <BookOpen className="w-5 h-5" strokeWidth={2.75} />
@@ -600,7 +614,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
 
       {/* 5. CARING ADVICE / ASSISTANT SPEECH SCRIPT (ALWAYS SHOWN FOR THE SENIOR) */}
       <div className="bg-[#E6F4EA] p-6 sm:p-7 rounded-[32px] border-2 border-[#34A853]/30 shadow-sm">
-        <p className="text-[#137333] text-xs sm:text-sm font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+        <p className="text-[#137333] text-base sm:text-lg font-black uppercase tracking-widest mb-2 flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-[#137333]" />
           <span>LỜI TRỢ LÝ ĐỌC CHO BÁC:</span>
         </p>

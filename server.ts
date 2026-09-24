@@ -136,7 +136,7 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
 2. CHỈ XÁC NHẬN HSD KHI:
 - Thấy rõ các chữ: "HSD", "Hạn sử dụng", "EXP", "EXPIRY", "Best Before", "Use By" ngay cạnh hoặc ngay phía trên/dưới dãy số.
 - Khi đó mới gán làm HSD trực tiếp ("expiry_date" = ngày đó, "is_calculated": false, "status": "success").
-- Mẫu phát âm: "Dạ sản phẩm này có hạn sử dụng đến ngày [HSD] ạ!"
+- NẾU NHÌN THẤY HSD THÌ BẮT BUỘC ĐỌC RÕ HẠN SỬ DỤNG TRONG LỜI NÓI: "Dạ sản phẩm này có hạn sử dụng đến ngày [HSD] ạ!"
 
 3. CHỈ XÁC NHẬN NSX KHI:
 - Thấy rõ các chữ: "NSX", "Ngày sản xuất", "MFG", "PROD", "DOM" ngay cạnh hoặc ngay phía trên/dưới dãy số.
@@ -144,9 +144,9 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
 - NẾU có dòng chữ thời hạn (Ví dụ "Hạn sử dụng 12 tháng kể từ NSX"): Lấy [NSX] + [Thời hạn] -> Tính ra HSD mới ("is_calculated": true, "expiry_date": [HSD tính toán]).
   * Mẫu phát âm: "Dạ sản phẩm này sản xuất ngày [NSX], hạn sử dụng [X] tháng nên Bác dùng tốt đến [HSD tính toán] ạ!"
 - NẾU KHÔNG có dòng chữ thời hạn:
-  * "expiry_date": "Chỉ có NSX - Chưa thấy HSD", "is_expired": false.
-  * Mẫu phát âm (Thực phẩm): "Dạ cháu chỉ thấy ngày sản xuất là [NSX] chứ chưa thấy thông tin hạn sử dụng. Bác lật mặt khác bấm chụp lại hoặc nhờ con cháu kiểm tra giúp ạ!"
-  * Mẫu phát âm (Thuốc): "Bác ơi, sản phẩm này chỉ ghi ngày sản xuất là [NSX] chứ không thấy hạn sử dụng. Để an toàn, Bác không nên tự ý dùng khi chưa hỏi lại dược sĩ hoặc con cháu ạ!"
+  * "expiry_date": "Chỉ có NSX - Chưa rõ HSD", "is_expired": false.
+  * Mẫu phát âm ngắn gọn (Thực phẩm): "Dạ chỉ thấy ngày sản xuất là [NSX], chưa rõ hạn dùng. Bác nhờ con cháu xem lại giúp ạ!"
+  * Mẫu phát âm ngắn gọn (Thuốc): "Bác ơi, chỉ thấy ngày sản xuất là [NSX] chứ chưa rõ hạn dùng. Bác nhờ con cháu kiểm tra lại giúp ạ!"
 
 4. NẾU ẢNH BỊ MỜ / THIẾU TÊN SẢN PHẨM:
 - Nếu chỉ quay mặt hông/mặt đáy/gói lẻ không có tên thương hiệu sản phẩm: Hãy gán "status": "unclear" hoặc "need_second_side" và nhắc người dùng đưa mặt chính/mặt trước của sản phẩm vào khung hình.
@@ -158,8 +158,11 @@ QUY TẮC BẮT BỘC VỀ NGÀY THÁNG & HẠN SỬ DỤNG (CỰC KỲ QUAN TR�
 - Mẫu câu phát âm:
   "Dạ sản phẩm này có hạn sử dụng đến ngày [Ngày/Tháng/Năm]. Lưu ý nếu Bác đã mở nắp rồi thì nên dùng hết trong [24 giờ / 3 ngày] và bảo quản tủ lạnh ạ."
 
-6. XỬ LÝ KHI CHỮ QUÁ NHỎ HOẶC MỜ:
-- Nếu thấy sản phẩm nhưng chữ in HSD/NSX quá nhỏ hoặc mờ không đọc chắc chắn: Gán "status": "unclear", speech_text: "Cháu thấy [Tên sản phẩm/hộp bánh] rồi nhưng chữ in hạn sử dụng hơi nhỏ hoặc mờ. Bác đưa camera lại gần hơn một chút dưới ánh sáng rõ để cháu đọc lại ạ." (TUYỆT ĐỐI KHÔNG khẳng định ngay là sản phẩm không có HSD).
+6. XỬ LÝ KHI CHỮ QUÁ NHỎ, MỜ HOẶC KHÔNG CHẮC CHẮN (PHẢI GIỮ THÔNG TIN TO & CONCISE):
+- Nếu thấy sản phẩm nhưng chữ in HSD/NSX quá nhỏ, mờ hoặc KHÔNG CHẮC CHẮN:
+  + Gán "status": "unclear" hoặc "expiration_info.status": "UNCLEAR".
+  + Speech_text PHẢI CỰC KỲ NGẮN GỌN (concise, dưới 20 từ): "Dạ chưa thấy rõ hạn sử dụng, Bác nhờ con cháu xem lại giúp ạ."
+  + Không dùng câu từ dài dòng rườm rà.
 
 CẤM: KHÔNG BAO GIỜ DÙNG "nhé ạ", "nha" MÀ CHỈ DÙNG "ạ" THÔI.
 
@@ -699,12 +702,12 @@ Trả về JSON thuần theo đúng schema đã khai báo.`,
                   : isNeedSecondSide
                   ? "Cần lật mặt sau / mặt đáy"
                   : isIndividualPack
-                  ? (itemType === "MEDICINE" ? "Vỉ thuốc xé lẻ - Không có HSD" : "Gói bóc lẻ - Không ghi HSD")
+                  ? (itemType === "MEDICINE" ? "Vỉ xé lẻ (Không HSD)" : "Gói lẻ (Không HSD)")
                   : isOnlyMfgNoShelfLife
                   ? "Chỉ thấy NSX (Chưa rõ HSD)"
                   : expiryDate && !expiryDate.toLowerCase().includes("không")
                   ? `HSD: ${expiryDate}`
-                  : "Không thấy rõ HSD",
+                  : "Chưa rõ hạn dùng",
                 mfg_date_text: rawDetectedMfg ? `NSX: ${rawDetectedMfg}` : undefined,
                 shelf_life_text: rawDetectedShelfLife || undefined,
                 calculation_note: calculationNote || undefined,
