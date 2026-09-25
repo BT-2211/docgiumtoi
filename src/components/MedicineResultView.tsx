@@ -294,30 +294,30 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
 
       {/* SPECIAL PROMPT BANNER FOR CROSS PRODUCT MISMATCH */}
       {isCrossMismatch && (
-        <div className="bg-red-50 border-4 border-red-500 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md animate-pulse">
+        <div className="bg-red-50 border-4 border-red-500 p-6 sm:p-7 rounded-[32px] flex flex-col gap-2.5 shadow-md animate-pulse">
           <div className="flex items-center gap-3 text-red-900">
             <AlertOctagon className="w-8 h-8 shrink-0 text-red-600" strokeWidth={3} />
-            <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
-              HÌNH NHƯ BÁC ĐANG CHỤP SẢN PHẨM KHÁC RỒI Ạ
+            <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">
+              CHỤP NHẦM HỘP KHÁC
             </h3>
           </div>
-          <p className="text-lg sm:text-xl font-bold text-red-950 leading-relaxed">
-            Cháu thấy hình này khác với mặt trước lúc nãy. Bác kiểm tra lại đúng hộp sản phẩm lúc nãy rồi bấm nút chụp lại ở dưới để cháu đọc hạn dùng cho Bác ạ!
+          <p className="text-xl sm:text-2xl font-black text-red-950 leading-snug">
+            Khác với mặt trước lúc nãy. Bác lấy đúng hộp và chụp lại nhé ạ!
           </p>
         </div>
       )}
 
       {/* SPECIAL PROMPT BANNER FOR NEED_SECOND_SIDE */}
       {isNeedSecondSide && (
-        <div className="bg-blue-50 border-4 border-blue-400 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md">
+        <div className="bg-blue-50 border-4 border-blue-400 p-6 sm:p-7 rounded-[32px] flex flex-col gap-2.5 shadow-md">
           <div className="flex items-center gap-3 text-blue-800">
             <RotateCcw className="w-8 h-8 shrink-0 text-blue-600" strokeWidth={3} />
-            <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
-              CHƯA THẤY HẠN SỬ DỤNG TRÊN MẶT NÀY
+            <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">
+              CHƯA THẤY HẠN DÙNG TRÊN MẶT NÀY
             </h3>
           </div>
-          <p className="text-lg sm:text-xl font-bold text-blue-950 leading-relaxed">
-            Cháu đã nhận diện được sản phẩm. Hạn sử dụng thường được in ở <span className="underline decoration-blue-500 font-black">mặt sau, mặt đáy hoặc nắp hộp</span>. Bác lật hộp lại và bấm nút chụp tiếp ở dưới ạ!
+          <p className="text-xl sm:text-2xl font-black text-blue-950 leading-snug">
+            Bác lật mặt sau hoặc mặt đáy rồi bấm chụp tiếp ở dưới ạ!
           </p>
         </div>
       )}
@@ -325,27 +325,27 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
       {/* SPECIAL SAFETY CARD FOR INDIVIDUAL_PACK (LƯU Ý AN TOÀN BAO BÌ) */}
       {isIndividualPack && (
         isMedicine ? (
-          <div className="bg-red-50 border-4 border-red-500 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md">
+          <div className="bg-red-50 border-4 border-red-500 p-6 sm:p-7 rounded-[32px] flex flex-col gap-2.5 shadow-md">
             <div className="flex items-center gap-3 text-red-900">
               <AlertOctagon className="w-8 h-8 shrink-0 text-red-600" strokeWidth={3} />
-              <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
-                CẢNH BÁO ĐỎ: VỈ THUỐC XÉ LẺ KHÔNG HSD
+              <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">
+                VỈ XÉ LẺ: KHÔNG CÓ HSD
               </h3>
             </div>
-            <p className="text-lg sm:text-xl font-bold text-red-950 leading-relaxed">
-              Bác ơi, đây là vỉ thuốc xé lẻ không có thông tin hạn sử dụng. Để đảm bảo an toàn tuyệt đối cho sức khỏe, nếu Bác không nhớ rõ ngày mua, Bác <span className="font-black underline decoration-red-600 text-red-900">tuyệt đối KHÔNG NÊN UỐNG</span> liều thuốc này ạ!
+            <p className="text-xl sm:text-2xl font-black text-red-950 leading-snug">
+              Không rõ ngày mua thì <span className="underline decoration-red-600">TUYỆT ĐỐI KHÔNG UỐNG</span> Bác nhé ạ!
             </p>
           </div>
         ) : (
-          <div className="bg-amber-50 border-4 border-amber-400 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md">
+          <div className="bg-amber-50 border-4 border-amber-400 p-6 sm:p-7 rounded-[32px] flex flex-col gap-2.5 shadow-md">
             <div className="flex items-center gap-3 text-amber-900">
               <AlertTriangle className="w-8 h-8 shrink-0 text-amber-600" strokeWidth={3} />
-              <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
-                LƯU Ý AN TOÀN BAO BÌ
+              <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">
+                GÓI LẺ: KHÔNG GHI HSD
               </h3>
             </div>
-            <p className="text-lg sm:text-xl font-bold text-amber-950 leading-relaxed">
-              Dạ đây là gói <span className="font-black text-amber-900">{result.item_name || result.product_name}</span> lẻ nên không ghi hạn sử dụng trên vỏ ạ. Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ.
+            <p className="text-xl sm:text-2xl font-black text-amber-950 leading-snug">
+              Nếu hộp mua đã lâu hoặc có mùi lạ, Bác không nên ăn ạ!
             </p>
           </div>
         )
@@ -595,17 +595,17 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
       {hasSpecificSafetyAlert && (
         <div
           id="card-safety-alert"
-          className="bg-white border-3 border-red-300 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-sm"
+          className="bg-red-50 border-4 border-red-500 p-6 sm:p-7 rounded-[32px] flex flex-col gap-3 shadow-md"
         >
-          <div className="flex items-center gap-3 text-red-600">
-            <AlertTriangle className="w-8 h-8 shrink-0" strokeWidth={3} />
-            <h3 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
-              LƯU Ý & CẢNH BÁO AN TOÀN
+          <div className="flex items-center gap-3 text-red-900">
+            <AlertTriangle className="w-8 h-8 shrink-0 text-red-600" strokeWidth={3} />
+            <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">
+              CẢNH BÁO AN TOÀN
             </h3>
           </div>
 
-          <div className="bg-red-50/90 p-5 sm:p-6 rounded-[24px] border border-red-200">
-            <p className="text-xl sm:text-2xl font-black text-red-800 leading-relaxed">
+          <div className="bg-white p-5 sm:p-6 rounded-[24px] border-2 border-red-200 shadow-xs">
+            <p className="text-2xl sm:text-3xl font-black text-red-900 leading-snug tracking-tight">
               {result.safety_alert}
             </p>
           </div>

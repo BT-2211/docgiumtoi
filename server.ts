@@ -212,14 +212,14 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
        + Gán "item_type": "CONSUMER_GOODS"
        + "expiry_date": "Gói bóc lẻ - Không ghi HSD"
        + "is_expired": false
-       + "safety_alert": "LƯU Ý: Đây là gói lẻ không ghi hạn sử dụng trên vỏ."
-       + "usage_instructions": "Nếu vỏ hộp lớn mua đã lâu hoặc có dấu hiệu bị hỏng, Bác không nên dùng để đảm bảo sức khỏe ạ."
+       + "safety_alert": "Gói lẻ không in HSD. Nếu mua đã lâu Bác không nên ăn ạ!"
+       + "usage_instructions": "Nếu vỏ hộp lớn mua đã lâu hoặc bánh có mùi lạ, Bác không nên ăn để đảm bảo sức khỏe ạ."
        + "speech_text": "Dạ đây là gói lẻ nên không ghi hạn sử dụng trên vỏ ạ. Nếu vỏ hộp lớn mua đã lâu hoặc bánh có dấu hiệu bị hỏng, Bác không nên ăn để đảm bảo sức khỏe ạ."
      - Nếu là THUỐC / DƯỢC PHẨM XÉ LẺ (MEDICINE):
        + Gán "item_type": "MEDICINE"
        + "expiry_date": "Vỉ thuốc xé lẻ - Không có HSD"
        + "is_expired": false
-       + "safety_alert": "CẢNH BÁO ĐỎ: Vỉ thuốc xé lẻ không có thông tin hạn sử dụng. Tuyệt đối không nên uống nếu không nhớ ngày mua!"
+       + "safety_alert": "Vỉ xé lẻ mất HSD. Tuyệt đối không uống nếu không nhớ ngày mua ạ!"
        + "usage_instructions": "Nếu Bác không nhớ rõ ngày mua, Bác tuyệt đối không nên uống liều thuốc này để đảm bảo an toàn ạ."
        + "speech_text": "Bác ơi, đây là vỉ thuốc xé lẻ không có thông tin hạn sử dụng. Để đảm bảo an toàn tuyệt đối cho sức khỏe, nếu Bác không nhớ rõ ngày mua, Bác tuyệt đối KHÔNG NÊN UỐNG liều thuốc này ạ!"
 
@@ -232,9 +232,15 @@ ${isSecondSideMode ? `   - Đây là LƯỢT CHỤP MẶT 2 để tìm HSD sau k
    - Nếu là PERSONAL_ITEM (Ví/Điện thoại/Chìa khóa/Mắt kính/Đồ cá nhân):
      * Trả về lời nhắc tiện ích thân thương (Ví dụ: "Bác nhớ cất gọn gàng vào nơi quen thuộc để dễ lấy ạ!").
 
-5. CẢNH BÁO AN TOÀN (safety_alert):
-   - Điền thông tin khi có cảnh báo nguy hiểm thực sự (như sản phẩm hết hạn, thuốc xé lẻ mất HSD).
-   - Nếu sản phẩm bình thường hoặc là đồ cá nhân an toàn, để chuỗi rỗng: "".
+5. CẢNH BÁO AN TOÀN (safety_alert) - QUY TẮC CỰC KỲ NGẮN GỌN & CHỮ TO:
+   - Phải CỰC KỲ NGẮN GỌN (dưới 15 từ), súc tích, đi thẳng vào cốt lõi để người lớn tuổi đọc được chữ to rõ mà không bị dài dòng.
+   - TUYỆT ĐỐI KHÔNG giải thích dài dòng.
+   - Ví dụ mẫu:
+     * Đồ hết hạn: "Đã quá hạn sử dụng. Tuyệt đối không dùng nữa ạ!"
+     * Uống sau ăn: "Phải uống sau khi ăn no để tránh đau dạ dày ạ!"
+     * Thuốc tim mạch/huyết áp: "Uống đúng giờ theo chỉ định của bác sĩ ạ!"
+     * Vỉ thuốc xé lẻ: "Không rõ ngày mua thì tuyệt đối không uống ạ!"
+   - Nếu sản phẩm bình thường hoặc đồ cá nhân an toàn, để chuỗi rỗng: "".
 
 6. XỬ LÝ CÁC EDGE CASES KHÁC (Ảnh mờ, Lóa sáng, Run tay, Chữ quá nhỏ, Bấm nhầm):
    - Nếu thấy sản phẩm (hộp bánh, vỉ thuốc, chai lọ...) nhưng chữ in HSD/NSX quá nhỏ hoặc mờ không đọc chắc chắn: Gán "status": "unclear", speech_text: "Cháu thấy [Tên sản phẩm/hộp bánh] rồi nhưng chữ in hạn sử dụng hơi nhỏ hoặc mờ. Bác đưa camera lại gần hơn một chút dưới ánh sáng rõ để cháu đọc lại ạ." (TUYỆT ĐỐI KHÔNG khẳng định ngay là sản phẩm không có HSD).

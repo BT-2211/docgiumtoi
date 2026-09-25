@@ -53,6 +53,18 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const [showTextInput, setShowTextInput] = useState<boolean>(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [cameraPermissionDenied, setCameraPermissionDenied] = useState<boolean>(false);
+  const [isCameraStarting, setIsCameraStarting] = useState<boolean>(true);
+  const [cameraErrorDetail, setCameraErrorDetail] = useState<{
+    code: 'NONE' | 'PERMISSION_DENIED' | 'NOT_FOUND' | 'NOT_READABLE' | 'UNSUPPORTED' | 'UNKNOWN';
+    title: string;
+    description: string;
+    actionHint: string;
+  }>({
+    code: 'NONE',
+    title: '',
+    description: '',
+    actionHint: '',
+  });
 
   // Multi-side session state
   const [multiSideSession, setMultiSideSession] = useState<MultiSideSession | null>(null);
@@ -68,9 +80,11 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef<boolean>(true);
   const isActiveRef = useRef<boolean>(isActive);
+  const isStartingCameraRef = useRef<boolean>(false);
   const cameraSessionIdRef = useRef<number>(0);
 
   useEffect(() => {
@@ -232,24 +246,41 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     cameraSessionIdRef.current++; // Invalidate pending startCamera promises
     releaseMediaStream();
     setCameraActive(false);
+    setIsCameraStarting(false);
   };
 
   // Initialize camera stream
   const startCamera = async () => {
+    if (isStartingCameraRef.current) {
+      return;
+    }
+    isStartingCameraRef.current = true;
+
     // Release any old stream without invalidating the new session
     releaseMediaStream();
 
     const currentSession = ++cameraSessionIdRef.current;
 
     if (!isActiveRef.current || !isMountedRef.current) {
+      isStartingCameraRef.current = false;
       return;
     }
 
+    setIsCameraStarting(true);
+
     try {
       setCameraPermissionDenied(false);
+      setCameraErrorDetail({ code: 'NONE', title: '', description: '', actionHint: '' });
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setCameraActive(false);
+        setIsCameraStarting(false);
+        setCameraErrorDetail({
+          code: 'UNSUPPORTED',
+          title: 'Trình duyệt chưa hỗ trợ camera web trực tiếp',
+          description: 'Môi trường trình duyệt hiện tại đang hạn chế luồng camera trực tiếp (webcam stream).',
+          actionHint: 'Bác hãy bấm nút "Chụp bằng máy ảnh điện thoại" bên dưới để chụp và đọc nhãn ngay ạ!',
+        });
         return;
       }
 
@@ -283,6 +314,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
       if (!stream) {
         setCameraActive(false);
+        setIsCameraStarting(false);
         return;
       }
 
@@ -306,6 +338,10 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.setAttribute('autoplay', 'true');
+        videoRef.current.setAttribute('muted', 'true');
+        videoRef.current.muted = true;
         try {
           await videoRef.current.play();
         } catch (playErr) {
@@ -315,6 +351,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
       setCameraActive(true);
       setCameraPermissionDenied(false);
+      setCameraErrorDetail({ code: 'NONE', title: '', description: '', actionHint: '' });
 
       // Check for torch capability safely
       const track = stream.getVideoTracks()[0];
@@ -331,29 +368,63 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     } catch (err: any) {
       console.warn('Cannot open live camera:', err);
       setCameraActive(false);
-      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+      const errName = err?.name || '';
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
         setCameraPermissionDenied(true);
+        setCameraErrorDetail({
+          code: 'PERMISSION_DENIED',
+          title: 'Trình duyệt đang chặn quyền Máy ảnh',
+          description: 'Ứng dụng chưa được cấp quyền dùng camera (có thể do đã bấm "Chặn" hoặc trình duyệt khóa mặc định).',
+          actionHint: 'Bác bấm vào biểu tượng 🔒 hoặc 📷 ở thanh địa chỉ web trên cùng, chọn "Cho phép" (Allow) máy ảnh rồi bấm thử lại ạ!',
+        });
+      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+        setCameraErrorDetail({
+          code: 'NOT_FOUND',
+          title: 'Không tìm thấy thiết bị máy ảnh',
+          description: 'Thiết bị hoặc máy tính hiện tại không có camera hoặc webcam.',
+          actionHint: 'Bác có thể bấm "Chụp bằng máy ảnh điện thoại" hoặc "Tải ảnh từ máy" bên dưới ạ!',
+        });
+      } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+        setCameraErrorDetail({
+          code: 'NOT_READABLE',
+          title: 'Máy ảnh đang bận',
+          description: 'Máy ảnh đang bị một ứng dụng khác (Zalo, Zoom, Meet, hoặc Camera khác) chiếm giữ.',
+          actionHint: 'Bác vui lòng tắt các ứng dụng đang dùng camera rồi bấm "Thử mở lại máy ảnh" ạ!',
+        });
+      } else {
+        setCameraErrorDetail({
+          code: 'UNKNOWN',
+          title: 'Chưa khởi động được luồng máy ảnh',
+          description: err?.message || 'Có thể do hạn chế bảo mật hoặc thiết bị chưa sẵn sàng.',
+          actionHint: 'Bác bấm "Chụp bằng máy ảnh điện thoại" bên dưới để chụp và đọc nhãn ngay lập tức ạ!',
+        });
       }
+    } finally {
+      setIsCameraStarting(false);
+      isStartingCameraRef.current = false;
     }
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
+    isActiveRef.current = isActive;
     if (isActive) {
       startCamera();
     } else {
       stopCamera();
     }
     return () => {
+      isMountedRef.current = false;
       stopCamera();
     };
   }, [facingMode, isActive]);
 
-  // Turn off camera & flash when user switches browser tab or minimizes app
+  // Turn off camera & flash when user switches browser tab or minimizes app, resume when visible
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         stopCamera();
-      } else if (isActive) {
+      } else if (isActiveRef.current && isMountedRef.current) {
         startCamera();
       }
     };
@@ -362,7 +433,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isActive, facingMode]);
+  }, []);
 
   const toggleCameraFacing = () => {
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
@@ -504,7 +575,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     speechService.primeAudio();
 
     if (!videoRef.current || !cameraActive) {
-      if (fileInputRef.current) {
+      if (nativeCameraInputRef.current) {
+        nativeCameraInputRef.current.click();
+      } else if (fileInputRef.current) {
         fileInputRef.current.click();
       }
       return;
@@ -710,7 +783,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           playsInline
           muted
           autoPlay
-          className={`w-full h-full object-cover transition-transform duration-300 ${cameraActive ? 'block' : 'hidden'} ${
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            cameraActive ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
+          } ${
             facingMode === 'user' ? '-scale-x-100' : 'scale-x-100'
           } ${
             torchOn ? 'brightness-110 contrast-105' : ''
@@ -762,23 +837,69 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           </div>
         )}
 
+        {/* Camera Starting / Initializing State */}
+        {!cameraActive && isCameraStarting && (
+          <div className="flex flex-col items-center justify-center p-6 text-center text-gray-200 gap-4 z-10 animate-fadeIn">
+            <div className="w-20 h-20 rounded-full bg-[#E65F2B]/20 flex items-center justify-center border-2 border-[#E65F2B]/40">
+              <Camera className="w-10 h-10 text-[#E65F2B] animate-pulse" strokeWidth={2.75} />
+            </div>
+            <div>
+              <p className="text-2xl sm:text-3xl font-black text-white leading-tight">
+                Đang mở máy ảnh...
+              </p>
+              <p className="text-base sm:text-lg text-white/80 font-bold mt-1">
+                Bác chờ trợ lý trong giây lát ạ
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Fallback if camera is inactive / Access Request */}
-        {!cameraActive && (
-          <div className="flex flex-col items-center justify-center p-6 text-center text-gray-200 gap-3 z-10">
-            <Camera className="w-16 h-16 text-[#E65F2B] animate-bounce" strokeWidth={2.5} />
-            <p className="text-xl sm:text-2xl font-bold text-white max-w-md leading-snug">
-              {cameraPermissionDenied
-                ? 'Ứng dụng cần quyền truy cập Máy ảnh (Camera) để chụp và đọc nhãn'
-                : 'Máy ảnh sẵn sàng để chụp nhãn sản phẩm hoặc soi hạn sử dụng'}
-            </p>
-            <button
-              id="btn-camera-access-request"
-              onClick={startCamera}
-              className="mt-2 bg-[#E65F2B] text-white font-black px-7 py-3.5 rounded-full hover:bg-[#d85320] active:scale-95 shadow-lg shadow-orange-500/40 uppercase tracking-wider text-lg sm:text-xl flex items-center gap-2.5 cursor-pointer transition-all"
-            >
-              <Camera className="w-6 h-6 stroke-[2.75]" />
-              <span>{cameraPermissionDenied ? 'CẤP QUYỀN MÁY ẢNH' : 'MỞ LẠI MÁY ẢNH'}</span>
-            </button>
+        {!cameraActive && !isCameraStarting && (
+          <div className="flex flex-col items-center justify-center p-5 sm:p-6 text-center text-gray-200 gap-3.5 z-10 animate-fadeIn max-w-lg mx-auto">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#E65F2B]/20 border-2 border-[#E65F2B]/40 flex items-center justify-center">
+              <Camera className="w-8 h-8 sm:w-10 sm:h-10 text-[#E65F2B]" strokeWidth={2.75} />
+            </div>
+
+            <div>
+              <h3 className="text-2xl sm:text-3xl font-black text-white leading-tight">
+                {cameraErrorDetail.title || (cameraPermissionDenied ? 'TRÌNH DUYỆT CHẶN MÁY ẢNH' : 'CHƯA BẬT ĐƯỢC MÁY ẢNH')}
+              </h3>
+              <p className="text-base sm:text-lg text-gray-200 font-bold mt-1.5 leading-snug">
+                {cameraErrorDetail.description || 'Bác bấm nút cam để mở máy ảnh điện thoại chụp ngay ạ!'}
+              </p>
+            </div>
+
+            {/* Instruction pill for unlocking permission */}
+            {(cameraPermissionDenied || cameraErrorDetail.code === 'PERMISSION_DENIED') && (
+              <div className="bg-amber-400/20 border-2 border-amber-400/50 text-amber-200 px-4 py-2.5 rounded-[18px] text-sm sm:text-base font-bold text-left flex items-center gap-2.5">
+                <span className="text-xl shrink-0">🔒</span>
+                <span>Bấm ổ khóa 🔒 trên thanh địa chỉ &gt; Chọn <b>"Cho phép"</b> Máy ảnh ạ.</span>
+              </div>
+            )}
+
+            {/* Direct Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-2.5 w-full pt-1">
+              {/* Primary option: Directly open phone native camera without permission hurdles */}
+              <button
+                id="btn-open-native-camera"
+                onClick={() => nativeCameraInputRef.current?.click()}
+                className="flex-1 min-h-[56px] bg-[#E65F2B] text-white font-black px-5 py-3 rounded-[20px] hover:bg-[#d85320] active:scale-95 shadow-lg shadow-orange-500/30 uppercase tracking-wide text-base sm:text-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <Camera className="w-5 h-5 stroke-[2.75]" />
+                <span>MÁY ẢNH ĐIỆN THOẠI</span>
+              </button>
+
+              {/* Secondary option: Retry WebRTC getUserMedia */}
+              <button
+                id="btn-camera-access-request"
+                onClick={startCamera}
+                className="min-h-[56px] bg-white/20 text-white border border-white/40 font-black px-5 py-3 rounded-[20px] hover:bg-white/30 active:scale-95 uppercase tracking-wide text-base sm:text-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <RefreshCw className="w-5 h-5" />
+                <span>THỬ LẠI</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -886,10 +1007,19 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
       {/* 3. SECONDARY ACTIONS: UPLOAD PHOTO & TYPE MEDICINE */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Hidden File and Native Camera Inputs */}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
+        <input
+          ref={nativeCameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
           className="hidden"
           onChange={handleFileUpload}
         />
