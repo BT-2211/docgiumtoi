@@ -96,16 +96,32 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({ settings, onUpdateSettings
           onClick={toggleSound}
           title={settings.autoReadSound ? 'Âm thanh: Đang BẬT (Bấm để Tắt)' : 'Âm thanh: Đang TẮT (Bấm để Bật)'}
           aria-label={settings.autoReadSound ? 'Âm thanh: Đang BẬT' : 'Âm thanh: Đang TẮT'}
-          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-md cursor-pointer shrink-0 ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full font-black transition-all active:scale-95 shadow-md cursor-pointer shrink-0 ${
             settings.autoReadSound
-              ? 'bg-white hover:bg-white/90'
-              : 'bg-white/20 border border-white/40 hover:bg-white/30'
+              ? 'bg-white text-[#E65F2B] hover:bg-white/95'
+              : 'bg-white/20 text-white border border-white/40 hover:bg-white/30'
           }`}
         >
           {settings.autoReadSound ? (
-            <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-[#E65F2B]" strokeWidth={2.75} />
+            <>
+              <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-[#E65F2B] shrink-0" strokeWidth={2.75} />
+              <span className="whitespace-nowrap uppercase tracking-wider font-black text-sm sm:text-base md:text-lg text-[#E65F2B] hidden sm:inline">
+                ÂM THANH: BẬT
+              </span>
+              <span className="whitespace-nowrap uppercase tracking-wider font-black text-sm text-[#E65F2B] sm:hidden">
+                ÂM THANH
+              </span>
+            </>
           ) : (
-            <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-white" strokeWidth={2.5} />
+            <>
+              <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-white shrink-0" strokeWidth={2.5} />
+              <span className="whitespace-nowrap uppercase tracking-wider font-black text-sm sm:text-base md:text-lg text-white hidden sm:inline">
+                ÂM THANH: TẮT
+              </span>
+              <span className="whitespace-nowrap uppercase tracking-wider font-black text-sm text-white sm:hidden">
+                TẮT ÂM
+              </span>
+            </>
           )}
         </button>
       </div>
