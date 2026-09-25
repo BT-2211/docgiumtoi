@@ -447,7 +447,7 @@ export const MedicineResultView: React.FC<MedicineResultViewProps> = ({
               }`}
             >
               <Volume2 className="w-6 h-6 stroke-[2.75]" />
-              <span>🔊 Nghe Hạn Dùng</span>
+              <span>Nghe Hạn Dùng</span>
             </button>
           </div>
 

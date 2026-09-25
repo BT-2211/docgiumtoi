@@ -284,7 +284,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           className="w-full min-h-[60px] bg-[#137333] text-white hover:bg-[#0f5c29] font-black text-lg rounded-[20px] flex items-center justify-center gap-3 active:scale-95 transition-all shadow-md shadow-green-600/20 uppercase tracking-wider cursor-pointer"
         >
           <Play className="w-5 h-5 fill-current" />
-          <span>🔊 BẤM NGHE THỬ GIỌNG ĐỌC</span>
+          <span>BẤM NGHE THỬ GIỌNG ĐỌC</span>
         </button>
       </div>
 

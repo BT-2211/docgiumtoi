@@ -94,24 +94,18 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({ settings, onUpdateSettings
         <button
           id="btn-toggle-sound"
           onClick={toggleSound}
-          className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full font-black text-xs sm:text-base transition-all active:scale-95 shadow-md cursor-pointer shrink-0 ${
+          title={settings.autoReadSound ? 'Âm thanh: Đang BẬT (Bấm để Tắt)' : 'Âm thanh: Đang TẮT (Bấm để Bật)'}
+          aria-label={settings.autoReadSound ? 'Âm thanh: Đang BẬT' : 'Âm thanh: Đang TẮT'}
+          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-md cursor-pointer shrink-0 ${
             settings.autoReadSound
-              ? 'bg-white text-[#E65F2B] hover:bg-white/90'
-              : 'bg-white/20 text-white border border-white/40 hover:bg-white/30'
+              ? 'bg-white hover:bg-white/90'
+              : 'bg-white/20 border border-white/40 hover:bg-white/30'
           }`}
         >
           {settings.autoReadSound ? (
-            <>
-              <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-[#E65F2B]" strokeWidth={3} />
-              <span className="whitespace-nowrap uppercase tracking-wider hidden sm:inline">🔊 ÂM THANH: BẬT</span>
-              <span className="whitespace-nowrap uppercase tracking-wider sm:hidden">🔊 BẬT</span>
-            </>
+            <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-[#E65F2B]" strokeWidth={2.75} />
           ) : (
-            <>
-              <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-white" strokeWidth={2.5} />
-              <span className="whitespace-nowrap uppercase tracking-wider hidden sm:inline">🔇 ÂM THANH: TẮT</span>
-              <span className="whitespace-nowrap uppercase tracking-wider sm:hidden">🔇 TẮT</span>
-            </>
+            <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-white" strokeWidth={2.5} />
           )}
         </button>
       </div>
